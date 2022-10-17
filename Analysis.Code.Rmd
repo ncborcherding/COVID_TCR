@@ -26,11 +26,11 @@ library(ProjecTILs)
 ############################
 
 DICE <- DatabaseImmuneCellExpressionData()
-ref8 <- load.reference.map("./annotations/ref_LCMV_Atlas_mouse_v1.rds")
-ref4 <- load.reference.map("./annotations/ref_LCMV_CD4_mouse_release_v1.rds")
+ref8 <- load.reference.map("./data/annotations/ref_LCMV_Atlas_mouse_v1.rds")
+ref4 <- load.reference.map("./data/annotations/ref_LCMV_CD4_mouse_release_v1.rds")
     
 for (i in seq_along(file_list)){
-    tmp <-  Read10X(paste0("./data/", file_list[i], "/filtered_feature_bc_matrix"))
+    tmp <-  Read10X(paste0("./data/sequencingRuns/", file_list[i], "/filtered_feature_bc_matrix"))
     s.obj <- CreateSeuratObject(tmp, project = file_list[i])
     rm(tmp)
     s.obj <- RenameCells(object = s.obj, new.names = paste0(file_list[i], "_", rownames(s.obj[[]])))
@@ -131,18 +131,18 @@ library(dplyr)
 library(harmony)
 library(scRepertoire)
 
-inventory <- read.delim("data.inventory.txt")
+inventory <- read.delim("./data/data.inventory.txt")
 samples<- inventory$donor
 
 list <- list()
 for (i in seq_along(samples)) {
-  list[[i]] <- readRDS(paste0("./data/", samples[i], "/processedRNA_SeuratObject.rds"))
+  list[[i]] <- readRDS(paste0("./data/sequencingRuns/", samples[i], "/processedRNA_SeuratObject.rds"))
 }
 
 #Merging Data
 list <- merge(list[[1]], list[-1])
 
-data.inventory <- read.delim("data.inventory.txt")
+data.inventory <- read.delim("./data/data.inventory.txt")
 meta <- list[[]]
 #meta <- meta[,-which(colnames(meta) %in% colnames(data.inventory))]
 barcodes <- rownames(meta)
@@ -167,7 +167,7 @@ list <- list %>%
                  algorithm = 3) %>% 
     identity()
 
-saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects.rds")
+saveRDS(list, file = "./data/processedData/Fullintegrated_seuratObjects.rds")
 ```
 
 ###################
@@ -184,7 +184,7 @@ library(scRepertoire)
 
 contig.list <- NULL
 for (i in seq_along(samples)){
-  contig.list[[i]] <-  read.csv(paste0("./data/", samples[i], "/filtered_contig_annotations.csv"))
+  contig.list[[i]] <-  read.csv(paste0("./data/sequencingRuns", samples[i], "/filtered_contig_annotations.csv"))
 }
 names(contig.list) <- samples
 
@@ -206,7 +206,7 @@ slot(list, "meta.data")$cloneType <- factor(slot(list, "meta.data")$cloneType,
 
 DimPlot(list, group.by = "cloneType") + scale_color_manual(values = rev(viridis_pal(option = "B")(length(unique(list$cloneType)))))
 
-saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects.rds")
+saveRDS(list, file = "./data/processedData/Fullintegrated_seuratObjects.rds")
 ```
 
 
@@ -243,7 +243,7 @@ list <- list %>%
                  algorithm = 3) %>% 
     identity()
 
-saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+saveRDS(list, file = "./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 
 
 #Relevel the Clonotype Expansion assignments
@@ -363,7 +363,7 @@ saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects_Tcells.rds")
 
 ```{r}
 dir.create("./output/Figure1/")
-list <- readRDS("./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 ```
 
 
@@ -405,7 +405,7 @@ ggsave("./output/Figure1/Figure1D.pdf", height = 5, width = 2)
 ```{r}
 df <- data.frame(list@reductions$umap@cell.embeddings, list@meta.data)
 
-#Sampling to allow for equal coimparisons for density
+#Sampling to allow for equal comparisons for density
 sampled <- df %>%
   group_by(timepoint) %>%
   sample_n(25000)
@@ -543,7 +543,7 @@ dir.create("./output/Figure2/")
 ```
 
 ```{r}
-list <- readRDS("./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 
 tfh <- subset(list, tissue == "LN" & CD4.annot %in% c("Tfh_Memory", "Tfh_Effector"))
 ```
@@ -568,12 +568,12 @@ tfh <- tfh %>%
                  algorithm = 3) %>% 
     identity()
 
-saveRDS(tfh, "./processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+saveRDS(tfh, "./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 ```
 
 #Figure 2A
 ```{r}
-tfh <- readRDS("./processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+tfh <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 library(RColorBrewer)
 library(ggplot2)
 library(Seurat)
@@ -624,12 +624,12 @@ ggsave("./output/Figure2/Figure2B_TFHonly.png", height = 5.3, width = 8, dpi = 6
 #Figure 2C
 ```{r}
 markers <- FindAllMarkers(tfh)
-write.csv(markers, "tfh_onlymarkers.csv")
+write.csv(markers, "./output/tfh_onlymarkers.csv")
 ```
 
 
 ```{r}
-markers <- read.csv("tfh_onlymarkers.csv")
+markers <- read.csv("./output/tfh_onlymarkers.csv")
 
 top <- markers %>%
   group_by(cluster) %>%
@@ -644,9 +644,7 @@ ggsave("./output/Figure2/Figure2C_TFHonly.pdf", height = 20, width = 6)
 
 #Figure 2D
 ```{r}
-
-
-ES <- readRDS("./ProcessedData/enrichmentResults.rds")
+ES <- readRDS("./data/ProcessedData/enrichmentResults.rds")
 
 meta <- tfh[[]]
 meta$enrichment.groupings <- NA
@@ -974,7 +972,7 @@ library(dplyr)
 library(Trex)
 library(mumosa)
 
-list <- readRDS("./processedData/Fullintegrated_seuratObjects_TFH.rds")
+list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH.rds")
 cells.to.remove <- unique(c(which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,1]) > 50), #TRA chain > 50 aa
                      which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,2]) > 50))) # TRB chain > 50 aa residues
 if(length(cells.to.remove) > 0) {
@@ -1001,7 +999,7 @@ clone.count <- clone.count[,-1]
 rownames(clone.count) <- ID
 
 conga <- AddMetaData(conga, clone.count)
-saveRDS(conga, "./processedData/conga_tfh_seuratObject.rds")
+saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 
 ####################
 #Adding Meta Data
@@ -1115,13 +1113,13 @@ leiden.clusters <- leiden.community(nn, resolution = 0.7, n.iterations = 5)
 conga$leiden.clusters <- leiden.clusters$membership
         
 
-saveRDS(conga, "./processedData/conga_tfh_seuratObject.rds")
+saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 ```
 
 
 #Figure 3B
 ```{r}
-conga <- readRDS("./processedData/conga_tfh_seuratObject.rds")
+conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
                   conga[[]])
 
