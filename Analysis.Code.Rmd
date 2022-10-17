@@ -1,0 +1,1433 @@
+---
+title: "Analysis Pipeline"
+author: "Nicholas Borcherding"
+date: '2022-07-11'
+output: html_document
+---
+
+###################
+#Processing Data
+#################
+
+General pipeline for the generating intermediate Seurat objects that have been 1) filtered/passe qc and 2) anntoated with multiple packages
+
+```{r eval=FALSE}
+dir.create("dataExplore")
+dir.create("dataExplore/qc")
+"%!in%" <- Negate("%in%")
+file_list <- list.files("./data/")
+
+library(SingleR)
+library(Matrix)
+library(ProjecTILs)
+
+#############################
+#Laoding Annotation Data Sets
+############################
+
+DICE <- DatabaseImmuneCellExpressionData()
+ref8 <- load.reference.map("./annotations/ref_LCMV_Atlas_mouse_v1.rds")
+ref4 <- load.reference.map("./annotations/ref_LCMV_CD4_mouse_release_v1.rds")
+    
+for (i in seq_along(file_list)){
+    tmp <-  Read10X(paste0("./data/", file_list[i], "/filtered_feature_bc_matrix"))
+    s.obj <- CreateSeuratObject(tmp, project = file_list[i])
+    rm(tmp)
+    s.obj <- RenameCells(object = s.obj, new.names = paste0(file_list[i], "_", rownames(s.obj[[]])))
+    s.obj<- subset(s.obj, subset = nFeature_RNA > 100)
+    s.obj[["mito.genes"]] <- PercentageFeatureSet(s.obj, pattern = "^MT-")
+    
+    p1 <- VlnPlot(object = s.obj, features = c("nCount_RNA")) + theme(legend.position = "none")
+    p2 <- VlnPlot(object = s.obj, features = c("nFeature_RNA")) + theme(legend.position = "none")
+    p3 <- VlnPlot(object = s.obj, features = c("mito.genes")) + theme(legend.position = "none")
+    
+    pdf(paste0("./dataExplore/qc/", file_list[i], ".pdf"), height = 8, width=12)
+    grid.arrange(p1, p2, p3, ncol = 3)
+    dev.off()
+    
+  ###########################
+  #Here is the filtering step
+  ############################
+  standev <- sd(log(s.obj$nFeature_RNA))*2 #cutting off above standard deviation of 2
+  mean <- mean(log(s.obj$nFeature_RNA))
+  cut <- round(exp(standev+mean))
+  
+  p4 <- FeatureScatter(s.obj, feature1 = "nCount_RNA", feature2 = "mito.genes") + 
+      geom_hline(yintercept = 15)
+  p5 <- FeatureScatter(s.obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + 
+      geom_hline(yintercept = cut)
+   
+  pdf(paste0("./dataExplore/qc/", file_list[i], "_scatterPlot.pdf"), height = 4, width=8)
+    grid.arrange(p4, p5, ncol = 2)
+  dev.off()
+  
+  s.obj <- subset(s.obj, subset = mito.genes < 15 & nFeature_RNA < cut)
+    
+  ###########################################
+  #Estimate Doublets for Each Sequencing Run
+  ############################################
+  sce <- as.SingleCellExperiment(s.obj)
+  sce <- scDblFinder(sce, BPPARAM=MulticoreParam(3))
+  doublets <- data.frame(db.weight.score = sce$scDblFinder.score, db.ratio = sce$scDblFinder.weighted, 
+                         db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
+  rownames(doublets) <- rownames(sce@colData)
+  s.obj <- AddMetaData(s.obj, doublets)
+  rm(sce)
+  
+  ## Finding variable features and normalizing data for integration to follow
+  s.obj <- NormalizeData(s.obj)
+  s.obj <- FindVariableFeatures(s.obj, selection.method = "vst", nfeatures = 2000)
+  s.obj <- quietTCRgenes(s.obj)
+  
+  #############################################
+  #Projectil Annotation of Cell Types
+  #############################################
+  
+    query.projected <- make.projection(s.obj, ref = ref4, ncores = 1)
+    
+    #Lapply across list of Seurat objects
+    query.projected <- cellstate.predict(ref = ref4, query =query.projected , reduction = "umap", ndim = 2)
+      meta <- query.projected[[]][c("functional.cluster", "functional.cluster.conf")]
+      colnames(meta) <- c("CD4.annot", "CD4.score")
+      rownames(meta) <- stringr::str_remove(rownames(meta), "Q_")
+    s.obj <- AddMetaData(s.obj, meta)
+    rm(query.projected)
+
+    ###########################
+    #CD8 LCMV Annotation
+    ############################
+    
+    query.projected <- make.projection(s.obj, ref = ref8, ncores = 1)
+    
+    query.projected <- cellstate.predict(ref = ref8, query = query.projected, reduction = "umap", ndim = 2)
+    meta <- query.projected[[]][c("functional.cluster", "functional.cluster.conf")]
+    colnames(meta) <- c("CD8.annot", "CD8.score")
+    rownames(meta) <- stringr::str_remove(rownames(meta), "Q_")
+    s.obj <- AddMetaData(s.obj, meta)
+    rm(query.projected)
+    rm(ref)
+    
+    
+    DICE.annotation <- NULL
+    tmp.2 <- s.obj@assays[["RNA"]]@counts
+    ####This approach for matrix conversion saves some memory
+    tmp.2 <- tmp.2[tabulate(summary(tmp.2)$i) != 0, , drop = FALSE]
+    com.res2 <- SingleR(tmp.2, ref=DICE, labels=DICE$label.fine, assay.type.test=1)
+      df <- data.frame("DICE.labels" = com.res2$labels, "DICE.pruned.labels" = com.res2$pruned.labels)
+      rownames(df) <- rownames(s.obj[[]])
+      s.obj <- AddMetaData(s.obj, df)
+ saveRDS(s.obj, file = paste0("./data/", file_list[i], "/processedRNA_SeuratObject.rds"))
+ rm(s.obj)
+}
+```
+
+###############
+#Integrate Data
+###############
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(harmony)
+library(scRepertoire)
+
+inventory <- read.delim("data.inventory.txt")
+samples<- inventory$donor
+
+list <- list()
+for (i in seq_along(samples)) {
+  list[[i]] <- readRDS(paste0("./data/", samples[i], "/processedRNA_SeuratObject.rds"))
+}
+
+#Merging Data
+list <- merge(list[[1]], list[-1])
+
+data.inventory <- read.delim("data.inventory.txt")
+meta <- list[[]]
+#meta <- meta[,-which(colnames(meta) %in% colnames(data.inventory))]
+barcodes <- rownames(meta)
+meta <- merge(meta, data.inventory, by.x = "orig.ident", by.y = "sample")
+meta <- meta[,colnames(data.inventory)[-2]]
+rownames(meta) <- barcodes
+
+list <- AddMetaData(list, meta)
+
+
+list <- list %>%
+    Seurat::NormalizeData(verbose = FALSE) %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    ScaleData(verbose = FALSE) %>% 
+    RunPCA(pc.genes = pbmc@var.genes, npcs = 30, verbose = FALSE) %>%
+    RunHarmony(c("orig.ident")) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:25) %>%
+    RunUMAP(reduction = "harmony",
+            dims = 1:25,
+            n.epochs = 500) %>%
+    FindClusters(resolution = 1, 
+                 algorithm = 3) %>% 
+    identity()
+
+saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects.rds")
+```
+
+###################
+#Adding Contig Data
+###################
+
+```{r}
+library(scRepertoire)
+
+######################################
+#iterate to make a list of contig csvs
+######################################
+
+
+contig.list <- NULL
+for (i in seq_along(samples)){
+  contig.list[[i]] <-  read.csv(paste0("./data/", samples[i], "/filtered_contig_annotations.csv"))
+}
+names(contig.list) <- samples
+
+##################################################
+#Reducing the data to the individual barcode level
+##################################################
+combinedObject <- combineTCR(contig.list, samples = samples, filterMulti = TRUE, removeNA = TRUE, cells = "T-AB")
+
+pt <- data.inventory$donor[match(samples, data.inventory$sample)]
+combinedObject <- addVariable(combinedObject, name = "Patient", variables = pt)
+list <- combineExpression(combinedObject, list, cloneCall = "aa", group.by = "Patient")
+
+slot(list, "meta.data")$cloneType <- factor(slot(list, "meta.data")$cloneType, 
+                levels = c("Hyperexpanded (0.1 < X <= 1)", 
+                           "Large (0.01 < X <= 0.1)", 
+                            "Medium (0.001 < X <= 0.01)", 
+                            "Small (1e-04 < X <= 0.001)", 
+                            "Rare (0 < X <= 1e-04)", NA))
+
+DimPlot(list, group.by = "cloneType") + scale_color_manual(values = rev(viridis_pal(option = "B")(length(unique(list$cloneType)))))
+
+saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects.rds")
+```
+
+
+######################
+#Iolating Only T Cells
+######################
+
+```{r}
+#Filtering using the scGate built into PorjecTIL based on T-AB
+#Only T cells with contig information
+list$filter  <- "Yes"
+list$filter <- ifelse(!is.na(list$CD8.annot) | !is.na(list$CD4.annot), "No", list$filter)
+list$filter <- ifelse(is.na(list$CTaa), "Yes", list$filter)
+
+list <- subset(list, filter != "Yes")
+
+list@meta.data$CD8.pos <- ifelse(list@assays$RNA@data["CD8A",] >=  0.4, "Yes", "No")
+
+dim(list)[2]
+#Check: 219283 cells
+
+list <- list %>%
+    Seurat::NormalizeData(verbose = FALSE) %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    ScaleData(verbose = FALSE) %>% 
+    RunPCA(pc.genes = pbmc@var.genes, npcs = 30, verbose = FALSE) %>%
+    RunHarmony(c("orig.ident", "tissue"), 
+               max.iter.harmony = 15) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:15) %>%
+    RunUMAP(reduction = "harmony",
+            dims = 1:15,
+            n.epochs = 500) %>%
+    FindClusters(resolution = 0.8, 
+                 algorithm = 3) %>% 
+    identity()
+
+saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+
+
+#Relevel the Clonotype Expansion assignments
+meta <- list[[]]
+meta <- split(meta, meta$donor)
+
+cloneTypes=c(None = 0, Rare = 1e-5, Small = 1e-4, 
+                              Medium = 1e-3, Large = 1e-2, Hyperexpanded = 1)
+
+Con.df <- NULL
+for(i in seq_along(meta)) {
+  tmp <- meta[[i]]
+  CDstatus <- table(tmp$CD8.pos)
+  tmp <- tmp %>% group_by(tmp[,"CTaa"], CD8.pos) %>%
+                      summarise(Clone.Prop = n())
+  tmp$Clone.Prop[which(tmp$CD8.pos == "No")] <- tmp$Clone.Prop[tmp$CD8.pos == "No"]/CDstatus[1]
+  tmp$Clone.Prop[which(tmp$CD8.pos == "Yes")] <- tmp$Clone.Prop[tmp$CD8.pos == "Yes"]/CDstatus[2]
+  colnames(tmp)[1] <- "CTaa"
+  data.CD4 <- merge(meta[[i]][meta[[i]]$CD8.pos == "No",], tmp[which(tmp$CD8.pos == "No"),], by = "CTaa")
+  data.CD8 <- merge(meta[[i]][meta[[i]]$CD8.pos == "Yes",], tmp[which(tmp$CD8.pos == "Yes"),], by = "CTaa")
+  data <- rbind.data.frame(data.CD4, data.CD8)
+  data <- data[,c("barcode", "Clone.Prop")]
+  Con.df <- rbind.data.frame(Con.df, data)
+}
+
+names.cell <- Con.df$barcode
+Con.df <- as.data.frame(Con.df[,-1])
+rownames(Con.df) <- names.cell
+colnames(Con.df) <- "Clone.Prop"
+Con.df$Clone.Group <- NA
+
+for (x in seq_along(cloneTypes)) { names(cloneTypes)[x] <- 
+        paste0(names(cloneTypes[x]), ' (', cloneTypes[x-1], 
+        ' < X <= ', cloneTypes[x], ')') }
+    for (i in 2:length(cloneTypes)) { 
+      Con.df$Clone.Group <- ifelse(Con.df$Clone.Prop > cloneTypes[i-1] & 
+                                Con.df$Clone.Prop <= cloneTypes[i], 
+                                names(cloneTypes[i]), Con.df$Clone.Group) 
+      }
+
+list <- AddMetaData(list, Con.df)
+```
+
+#########################################
+#Adding Known Epitope Sequences Annotation
+##########################################
+
+```{r}
+#Spike 167-180 epitope
+sequence <- read.csv("./sequenceInfo/Sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(list$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+list$TCRB.S167.180<- NA
+list$TCRB.S167.180[TB] <- "Specific"
+
+list$TCRA.S167.180 <- NA
+list$TCRA.S167.180[TA] <- "Specific"
+
+
+#Spike 815-830 epitope
+
+sequence <- read.csv("./sequenceInfo/dykema.sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(list$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+list$TCRB.S815.830 <- NA
+list$TCRB.S815.830[TB] <- "Specific"
+
+list$TCRA.S815.830 <- NA
+list$TCRA.S815.830[TA] <- "Specific"
+
+# VDJdb sequence
+
+sequences <- read.delim("./sequenceInfo/VDJdb.tsv")
+sequences <- sequences[sequences$MHC.class == "MHCII" & sequences$Epitope.gene == "Spike",]
+
+epitope <- c("NCTFEYVSQPFLMDL" = "S164.179",
+"RISNCVADYSVLYNS" = "S356.371",
+"NFSQILPDPSKPSKR" = "S800.815",
+"HWFVTQRNFYEPQII" = "S1101.1115",
+"VGGNYNYLYRLFRKS" = "S445.459",
+"NNSYECDIPIGAGIC" = "S657.671")
+
+list$TCRB.VDJ.db <- NA
+list$TCRA.VDJ.db <- NA
+for (i in seq_along(epitope)) {
+  sequences$Epitope[which(sequences$Epitope == names(epitope)[i])] <- epitope[i]
+  TA <- sequences[sequences$Gene == "TRA" & sequences$Epitope == epitope[i], ]
+  TB <- sequences[sequences$Gene == "TRB" & sequences$Epitope == epitope[i], ]
+  TA.loc <-which(CTaa$V1 %in% TA$CDR3)
+  TB.loc <-which(CTaa$V2 %in% TB$CDR3)
+  list$TCRB.VDJ.db[TB.loc] <- epitope[i]
+  list$TCRA.VDJ.db[TA.loc] <- epitope[i]
+}
+
+
+list$TCRB.epitope  <- NA
+list$TCRB.epitope <- ifelse(!is.na(list$TCRB.S167.180), "S167.180", NA)
+list$TCRB.epitope <- ifelse(!is.na(list$TCRB.S815.830), "S815.830", list$TCRB.epitope)
+list$TCRB.epitope <- ifelse(!is.na(list$TCRB.VDJ.db) & is.na(list$TCRB.epitope), list$TCRB.VDJ.db, list$TCRB.epitope)
+
+list$TCRA.epitope  <- NA
+list$TCRA.epitope <- ifelse(!is.na(list$TCRA.S167.180), "S167.180", NA)
+list$TCRA.epitope <- ifelse(!is.na(list$TCRA.S815.830), "S815.830", list$TCRA.epitope)
+list$TCRA.epitope <- ifelse(!is.na(list$TCRA.VDJ.db) & is.na(list$TCRA.epitope), list$TCRA.VDJ.db, list$TCRA.epitope)
+
+saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+```
+
+
+###################
+#Figure 1 Graphs
+###################
+
+```{r}
+dir.create("./output/Figure1/")
+list <- readRDS("./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+```
+
+
+# Figure 1C
+```{r}
+DimPlot(list, label = TRUE, raster=FALSE, pt.size = 0.5, repel = TRUE) + 
+  theme_void() + 
+  scale_color_manual(values = mycolors) 
+
+ggsave("./output/Figure1/Figure1C.pdf")
+```
+
+# Figure 1D
+```{r}
+source("./R/utils.R")
+library(Nebulosa)
+
+genes <- c("CD4", "CD8A", "CCR7", "SELL", "CXCR5", "ICOS", "FOXP3", "IL2RA", "CTLA4", "PDCD1")
+
+x <- plot_density(list,
+                  features = genes, 
+                  size = 0.5,
+                  combine = FALSE)
+
+for(i in seq_along(x)) {
+  x[[i]] <- x[[i]] + 
+              guides(color = "none") + 
+              scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) +
+              theme_void() + 
+              theme(plot.title = element_blank(), 
+                    plot.margin = unit(c(0.6, 0.15, 0.6, 0.15), "cm"))
+}
+
+plot_a_list(x,5,2)
+ggsave("./output/Figure1/Figure1D.pdf", height = 5, width = 2)
+```
+
+#Figure 1E
+```{r}
+df <- data.frame(list@reductions$umap@cell.embeddings, list@meta.data)
+
+#Sampling to allow for equal coimparisons for density
+sampled <- df %>%
+  group_by(timepoint) %>%
+  sample_n(25000)
+
+sampled$timepoint <- factor(sampled$timepoint, levels = c("d28", "d60", "d110", "d201"))
+
+ggplot() + 
+  geom_point(data = sampled, aes(x = UMAP_1, y = UMAP_2), stroke = 0, color = "grey") + 
+  stat_density_2d(data = sampled, aes(x = UMAP_1, y = UMAP_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  facet_grid(.~timepoint) + 
+  xlim(-8,12) + 
+  ylim(-11,7) + 
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  guides(fill = "none") + 
+  theme_void() 
+
+ggsave("./output/Figure1/Figure1E.png", height = 6, width = 28, dpi = 600, bg = "transparent")
+```
+
+#Figure 1F
+```{r}
+sampled <- df %>%
+  group_by(tissue) %>%
+  sample_n(90000)
+
+sampled$tissue <- factor(sampled$tissue, levels = c("PB", "LN"))
+ggplot() +
+  geom_point(data = sampled, aes(x = UMAP_1, y = UMAP_2), stroke = 0, color = "grey") + 
+  stat_density_2d(data = subset(sampled, tissue == "LN"), aes(x = UMAP_1, y = UMAP_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  stat_density_2d(data = subset(sampled, tissue == "PB"), aes(x = UMAP_1, y = UMAP_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  facet_grid(.~tissue) + 
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  xlim(-8,12) + 
+  ylim(-11,7) + 
+  guides(fill = "none") + 
+  theme_void()  + 
+  theme(plot.title = element_blank(),
+        strip.text.x = element_blank())
+ggsave("./output/Figure1/Figure1F.png", height = 6, width = 14, dpi = 600, bg = "transparent")
+```
+
+#Figure 1G
+```{r}
+#Sorting epitopes into either 167-180 or other
+other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
+
+df$epitope <- NA
+
+other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
+df$epitope[c(which(df$TCRB.epitope == "S167.180"), which(df$TCRA.epitope == "S167.180"))] <- "epitope.S167.180"
+df$epitope[c(which(df$TCRB.epitope %in% other), which(df$TCRA.epitope %in% other))] <- "other.spike"
+
+ggplot() +
+  geom_density2d(data = df, aes(x = UMAP_1, y = UMAP_2), color = "black", lwd = 0.5) + 
+  geom_point(data = subset(df, !is.na(epitope)), aes(x = UMAP_1, y = UMAP_2, fill = epitope), shape=21, stroke = 0.25, size = 3) + 
+  guides(fill = "none") + 
+  theme_void() + 
+  scale_fill_manual(values = rev(brewer.pal(11, "RdYlBu")[c(2,10)]))
+ggsave("./output/Figure1/Figure1G.png", height = 6, width = 7, dpi = 600, bg = "transparent")
+```
+
+#Figure 1H
+```{r}
+library(ggseqlogo)
+library(msa)
+
+meta <- list[[]]
+meta <- meta[!is.na(meta$TCRB.S167.180) |!is.na(meta$TCRA.S167.180),] 
+TRB <- unique(str_split(meta$CTaa, "_", simplify = TRUE)[,2])
+TRA <- unique(str_split(meta$CTaa, "_", simplify = TRUE)[,1])
+
+#################
+#S167-180 Epitope
+#################
+
+align <- msa(TRA, 
+              type = "protein", 
+              maxiters = 30)
+  align2 <- msaConvert(align, type="seqinr::alignment")
+  
+  ggseqlogo(align2$seq, 
+            seq_type='aa', 
+            method='p') 
+  ggsave("./output/Figure1/Figure1H.Specific167.TRA.pdf", height =3, width = 4.5)
+  
+    align <- msa(TRB, 
+               type = "protein", 
+               maxiters = 30)
+  align2 <- msaConvert(align, type="seqinr::alignment")
+  
+  ggseqlogo(align2$seq, 
+            seq_type='aa', 
+            method='p') 
+  ggsave("./output/Figure1/Figure1H.Specific167.TRB.pdf", height =3, width = 4.5)
+
+#####################
+#Other Spike Epitopes
+#####################
+  
+meta <- list[[]]
+meta <- meta[!is.na(meta$TCRA.epitope) & is.na(meta$TCRA.S167.180) |!is.na(meta$TCRB.epitope) & is.na(meta$TCRB.S167.180),] 
+  TRB <- unique(str_split(meta$CTaa, "_", simplify = TRUE)[,2])
+  TRA <- unique(str_split(meta$CTaa, "_", simplify = TRUE)[,1])
+  
+  align <- msa(TRA, 
+               type = "protein", 
+               maxiters = 30)
+  align2 <- msaConvert(align, type="seqinr::alignment")
+  
+  ggseqlogo(align2$seq, 
+            seq_type='aa', 
+            method='p') 
+  ggsave("./output/Figure1/Figure1H.Other.TRA.pdf", height =3, width = 4.5)
+  
+    align <- msa(TRB, 
+               type = "protein", 
+               maxiters = 30)
+  align2 <- msaConvert(align, type="seqinr::alignment")
+  
+  ggseqlogo(align2$seq, 
+            seq_type='aa', 
+            method='p') 
+  ggsave(paste0("./output/Figure1/Figure1H.Other.TRB.pdf"), height =3, width = 4.5)
+```
+
+##################
+#Figure 2 Graphs
+##################
+
+```{r}
+dir.create("./output/Figure2/")
+```
+
+```{r}
+list <- readRDS("./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+
+tfh <- subset(list, tissue == "LN" & CD4.annot %in% c("Tfh_Memory", "Tfh_Effector"))
+```
+
+
+
+```{r}
+DefaultAssay(tfh) <- "RNA"
+
+tfh <- tfh %>%
+    Seurat::NormalizeData(verbose = FALSE) %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    quietTCRgenes() %>%
+    ScaleData(verbose = FALSE) %>% 
+    RunPCA(pc.genes = pbmc@var.genes, npcs = 30, verbose = FALSE) %>%
+    RunHarmony(c("orig.ident")) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:25) %>%
+    RunUMAP(reduction = "harmony",
+            dims = 1:20,
+            n.epochs = 500) %>%
+    FindClusters(resolution = 0.5, 
+                 algorithm = 3) %>% 
+    identity()
+
+saveRDS(tfh, "./processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+```
+
+#Figure 2A
+```{r}
+tfh <- readRDS("./processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+library(RColorBrewer)
+library(ggplot2)
+library(Seurat)
+library(dplyr)
+mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(tfh$seurat_clusters)))
+
+update_geom_defaults("point", list(stroke = 0.25))
+DimPlot(tfh, reduction = "umap", label = TRUE, repel = TRUE, label.size = 4, raster=FALSE, pt.size = 0.25) +
+  scale_color_manual(values = mycolors) + 
+  guides(colors = "none", fill = "none") + 
+  theme_void() + 
+  NoLegend() 
+
+ggsave("./output/Figure2/Figure2A_TFHonly.pdf", height = 3.5, width = 4, dpi = 600, bg = "transparent")
+```
+
+```{r}
+library(patchwork)
+plot <- NULL
+features <- sort(c("BCL6", "CXCR5", "CD274", "ICOS", "CCR7","CD40LG","IL6R","CXCL13", "MKI67", "FOXP3", "IL10", "SELL"))
+for (i in seq_along(features)) {
+
+  if(i == 1) {
+    plot <- plot_density(tfh,
+                features = features[i], 
+                size = 0.5) + 
+     scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+   guides(fill = "none", color = "none") + 
+      theme_void() + 
+      theme(plot.title = element_blank(), 
+            plot.margin = margin(10,1,1,1))
+  } else {
+    plot <- plot + plot_density(tfh, 
+                features = features[i], 
+                size = 0.5) + 
+     scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+    guides(fill = "none", color = "none") + 
+      theme_void() + 
+      theme(plot.title = element_blank(), 
+            plot.margin = margin(10,1,1,1))
+  }
+}
+
+plot + plot_layout(nrow = 3)
+ggsave("./output/Figure2/Figure2B_TFHonly.png", height = 5.3, width = 8, dpi = 600, bg = "transparent")
+```
+
+#Figure 2C
+```{r}
+markers <- FindAllMarkers(tfh)
+write.csv(markers, "tfh_onlymarkers.csv")
+```
+
+
+```{r}
+markers <- read.csv("tfh_onlymarkers.csv")
+
+top <- markers %>%
+  group_by(cluster) %>%
+  slice_max(order_by = avg_log2FC, n = 8)
+
+DotPlot(tfh, features = unique(top$gene)) + 
+  scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  scale_y_discrete(limits=rev)+ 
+  coord_flip()
+ggsave("./output/Figure2/Figure2C_TFHonly.pdf", height = 20, width = 6)
+```
+
+#Figure 2D
+```{r}
+
+
+ES <- readRDS("./ProcessedData/enrichmentResults.rds")
+
+meta <- tfh[[]]
+meta$enrichment.groupings <- NA
+meta$enrichment.groupings[which(meta$seurat_clusters %in% c(0,1,2,6,7,10))] <- "Memory.TFH"
+meta$enrichment.groupings[which(meta$seurat_clusters %in% c(3))] <- "Effector.TFH"
+meta$enrichment.groupings[which(meta$seurat_clusters %in% c(4))] <- "TFR"
+meta$enrichment.groupings[which(meta$seurat_clusters %in% c(8))] <- "IL10.TFH"
+meta$enrichment.groupings[which(meta$seurat_clusters %in% c(11))] <- "Proliferating.TFH"
+meta$enrichment.groupings[which(meta$seurat_clusters %in% c(9))] <- "Cytolytic.TFH"
+meta <- meta[which(!is.na(meta[,"enrichment.groupings"])),]
+
+ES2 <- ES[rownames(ES) %in% rownames(meta),]
+variances <- apply(ES2, 2, var)
+#ES2 <- ES2[,-which(variances == 0)]
+
+pathways <- colnames(ES2)
+
+ES2 <- merge(ES2, meta, by = 0)
+
+sig.results <- getSignificance(ES2, 
+                               group = "seurat_clusters", 
+                               gene.sets = pathways, 
+                               fit = "KW")
+
+sig.results2 <- getSignificance(ES2, 
+                               group = "seurat_clusters", 
+                               gene.sets = pathways, 
+                               fit = "ANOVA")
+
+KW.sig.pathways <- sig.results %>%
+                        slice_max(order_by = Chi.square, n = 200) %>%
+                        rownames()
+
+ANOVA.sig.pathways <- sig.results2 %>%
+                        slice_max(order_by = f.value, n = 200) %>%
+                        rownames()
+
+pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
+
+#pathways.intersect <- pathways.intersect[-51]
+pathways.intersect <- pathways.intersect[-c(3,4,8,41,47,57,62,73,78,80,85,86,90,99,101,120,125,139,141)]
+pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
+
+
+summary <- ES2 %>%
+  group_by(seurat_clusters) %>%
+  summarise(across(pathways.intersect, median))
+
+normalize <- function(x) {
+      (x- min(x)) /(max(x)-min(x))
+}
+
+for(i in 2:43) {
+  summary[,i] <- normalize(summary[,i])
+}
+summary <- as.data.frame(summary)
+#summary <- summary[,-5]
+#summary <- summary[,-9]
+#summary <- summary[,-80]
+
+rownames(summary) <- summary$seurat_clusters
+colnames(summary) <- stringr::str_remove_all(colnames(summary), "_UCell")
+
+pdf("./output/Figure2/GSEA.heatmap.pdf", height = 8, width = 10)
+pheatmap::pheatmap(t(summary[,2:43]))
+dev.off()
+
+
+
+################################
+#Calculating PCA on Enrichment
+###############################
+
+x <- prcomp(ES2[,which(colnames(ES2) %in% pathways.intersect)], center = TRUE, scale. = TRUE)
+eigs <- x$sdev^2
+eigs <- eigs[1:10]
+
+var_explained <- eigs/sum(eigs)
+
+df <- as.data.frame(x$rotation[,1:10])
+df$names <- rownames(df)
+options(ggrepel.max.overlaps = Inf)
+fviz_pca_var(x,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE ,    # Avoid text overlapping
+             select.var = list(contrib = 60), 
+             labelsize = 2)
+
+ggsave("./output/Figure2/Overall.contribution.pdf", height = 20, width = 20)
+
+fviz_contrib(x, choice = "var", axes = 1, top = 10)
+ggsave("./output/Figure2/PC1_contribution.pdf", height = 7, width = 7)
+
+fviz_contrib(x, choice = "var", axes = 2, top = 10)
+ggsave("./output/Figure2/PC2_contribution.pdf", height = 7, width = 7)
+    
+df %>%
+    ggplot(aes(x=df[,1],y=df[,2])) + 
+    geom_point() + 
+    geom_text(aes_string(label = "names"), 
+            size=2, hjust = 0.5, nudge_y = -0.01) + 
+    geom_hline(yintercept = 0, lty=2) + 
+    geom_vline(xintercept = 0, lty=2) +
+    labs(x=paste0("PC1",": ",round(var_explained[1]*100,1),"%"),
+            y=paste0("PC2", ": ",round(var_explained[2]*100,1),"%")) +
+    theme_classic()
+ggsave("./output/Figure2/Figure2E.1_TFHonly.pdf", height = 7, width = 7)
+    
+df <- data.frame(x$x[,1:30], meta)
+
+ggplot(df) +
+  geom_hline(yintercept = 0, lty = 2) + 
+  geom_vline(xintercept = 0, lty = 2) + 
+  stat_density_2d(aes(x=PC1, y = PC2, fill = stat(level)), 
+                  geom = "polygon", color = "black", lwd = 0.25, bins = 20) + 
+  facet_grid(.~timepoint) + 
+  labs(x=paste0("PC1",": ",round(var_explained[1]*100,1),"%"),
+       y=paste0("PC2", ": ",round(var_explained[2]*100,1),"%")) +
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  theme_classic() + 
+  guides(fill = "none")
+ggsave("./output/Figure2/Figure2E.2_TFHonly.pdf", height = 2.75, width = 25)
+
+ggplot(ES2, aes(x=seurat_clusters, y = normalize(HALLMARK_TNFA_SIGNALING_VIA_NFKB_UCell))) + 
+  geom_violin(aes(fill = seurat_clusters)) +
+  geom_boxplot(width = 0.25) + 
+  scale_fill_manual(values = mycolors[c(1:5,7:12)]) + 
+  guides(fill = "none") + 
+  theme_classic() + 
+  theme(axis.title = element_blank())
+
+ggsave("./output/Figure2/TNFsignaling.pdf", height = 2.75, width = 4)
+```
+```{r}
+DimPlot(tfh, group.by = "cloneType") + 
+  scale_color_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(4)[c(1,2,4)]) + 
+  theme_void() + 
+  theme(plot.title = element_blank())
+ggsave("./output/Figure3/Figure2E.1_TFHonly.pdf", height = 3, width = 6)
+
+df <- data.frame(tfh@reductions$umap@cell.embeddings, tfh[[]])
+
+y <- df %>%
+  group_by(orig.ident, CTaa) %>% 
+  count()
+
+y <- y %>%
+  group_by(orig.ident) %>%
+  mutate(sum.n = sum(n))
+
+y$scaled <- y$n/y$sum.n
+
+df$new.merge <- paste0(df$orig.ident, "_", df$CTaa)
+y$new.merge <- paste0(y$orig.ident, "_", y$CTaa)
+
+
+cloneTypes=c(Rare = 1e-4, Small = 0.001, 
+                              Medium = 0.01, Large = 0.1, Hyperexpanded = 1)
+cloneTypes <- c(None = 0, cloneTypes)
+y$cloneType <- NA
+for (x in seq_along(cloneTypes)) { names(cloneTypes)[x] <- 
+        paste0(names(cloneTypes[x]), ' (', cloneTypes[x-1], 
+        ' < X <= ', cloneTypes[x], ')') }
+
+for (i in 2:length(cloneTypes)) { 
+  y$cloneType <- ifelse(y$scaled > cloneTypes[i-1] & y$scaled <= cloneTypes[i], names(cloneTypes[i]), y$cloneType) 
+}
+
+colnames(y)[7] <- "Clone.Rep"
+y <- y[,-c(1:2)]
+df <- merge(df, y, by = "new.merge")
+
+ggplot(df, aes(x= UMAP_1, y = UMAP_2)) + 
+  geom_point(aes(color = Clone.Rep), size = 0.5) + 
+  guides(color = "none") + 
+  scale_color_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(7)[c(1,3,6)]) + 
+  theme_void()
+ggsave("./output/Figure2/Figure2E.1_TFHonly.pdf")
+
+ggplot(df, aes(x= UMAP_1, y = UMAP_2)) + 
+  geom_point(aes(color = sqrt(scaled)), size = 0.5, stroke = 0) + 
+   guides(color = "none") + 
+    scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  theme_void()
+ggsave("./output/Figure2/Figure2E.1_TFHonly.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
+
+
+tfh.28 <- subset(tfh, timepoint == "d28")
+circles <- getCirclize(tfh.28, 
+                       group.by = "ident")
+
+#Just assigning the normal colors to each cluster
+grid.cols <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(tfh$seurat_clusters)))
+names(grid.cols) <- levels(tfh@active.ident)
+
+
+#Graphing the chord diagram
+pdf("./output/Figure2/tfh.d28.pdf", height = 4, width = 4)
+circlize::chordDiagram(circles,
+                       self.link = 1, 
+                       grid.col = grid.cols, 
+                       directional = 1,
+                       direction.type =  "arrows",
+                       link.arr.type = "big.arrow")
+dev.off()
+
+tfh.60 <- subset(tfh, timepoint == "d60")
+circles <- getCirclize(tfh.60, 
+                       group.by = "ident")
+
+pdf("./output/Figure2/tfh.d60.pdf", height = 4, width = 4)
+circlize::chordDiagram(circles,
+                       self.link = 1, 
+                       grid.col = grid.cols, 
+                       directional = 1,
+                       direction.type =  "arrows",
+                       link.arr.type = "big.arrow")
+dev.off()
+
+tfh.110 <- subset(tfh, timepoint == "d110")
+circles <- getCirclize(tfh.110, 
+                       group.by = "ident")
+
+pdf("./output/Figure2/tfh.d110.pdf", height = 4, width = 4)
+circlize::chordDiagram(circles,
+                       self.link = 1, 
+                       grid.col = grid.cols, 
+                       directional = 1,
+                       direction.type =  "arrows",
+                       link.arr.type = "big.arrow")
+dev.off()
+
+
+tfh.201 <- subset(tfh, timepoint == "d201")
+circles <- getCirclize(tfh.201, 
+                       group.by = "ident")
+
+pdf("./output/Figure2/tfh.d201.pdf", height = 4, width = 4)
+circlize::chordDiagram(circles,
+                       self.link = 1, 
+                       grid.col = grid.cols, 
+                       directional = 1,
+                       direction.type =  "arrows",
+                       link.arr.type = "big.arrow")
+dev.off()
+
+```
+
+
+#Figure 2F
+```{r}
+sampled <- df %>%
+  group_by(timepoint) %>%
+  sample_n(2000)
+
+sampled$timepoint <- factor(sampled$timepoint, levels = c("d28", "d60", "d110", "d201"))
+tfh$timepoint <- factor(tfh$timepoint, levels = c("d28", "d60", "d110", "d201"))
+df <- data.frame(tfh[[]], tfh@reductions$umap@cell.embeddings)
+
+xmax <- round(max(df$UMAP_1) + 3)
+xmin <- round(min(df$UMAP_1) - 3)
+ymax <- round(max(df$UMAP_2) + 3)
+ymin <- round(min(df$UMAP_2) - 3)
+
+ggplot(sampled, aes(x = UMAP_1, y = UMAP_2)) +
+    geom_point(color = "grey") + 
+     stat_density_2d(mapping = aes(fill = stat(level)),
+                              geom = "polygon", 
+                              bins = 20) + 
+  geom_point(data = sampled[c(which(sampled$TCRA.S167.180 == "Specific"), which(sampled$TCRB.S167.180 == "Specific")), ], aes(x = UMAP_1, y = UMAP_2), fill = "white", shape = 21, size = 3) + 
+          facet_grid(~timepoint) + 
+           scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) +
+  ylim(ymin, ymax) + 
+  xlim(xmin, xmax)+
+  guides(fill = "none") + 
+  theme_classic()
+ggsave("./output/Figure2/Figure2F_TFHonly.pdf", height = 3, width = 10.5)
+
+df2 <- df
+df2$spike <- "No"
+df2$spike[which(df2$TCRA.S167.180 == "Specific")] <- "Yes"
+df2$spike[which(df2$TCRB.S167.180 == "Specific")] <- "Yes"
+
+x <- df2 %>%
+  group_by(timepoint, spike) %>%
+  count()
+```
+
+#Figure 2G
+```{r}
+table <- table(sampled$seurat_clusters, sampled$timepoint)
+
+for(x in seq_len(ncol(table))) {
+  table[,x] <- table[,x]/sum(table[,x])
+}
+table <- data.frame(table)
+
+ggplot(table, aes(x=Var1, y = Freq, fill = Var2)) + 
+  geom_bar(stat = "identity", position = "fill") + 
+  scale_fill_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(4)) + 
+  xlab("Clusters") + 
+  ylab("Relative Proportion") + 
+  theme_classic()
+ggsave("./output/Figure3/Figure2G_TFHonly.pdf", height = 3, width = 5)
+```
+
+
+################
+#Figure 3 Graphs
+################
+
+```{r}
+dir.create("./output/Figure3/")
+```
+
+
+# Loading and Filtering Data
+
+
+################will need to add the old filter for TCR related Contigs
+
+```{r}
+library(dplyr)
+library(Trex)
+library(mumosa)
+
+list <- readRDS("./processedData/Fullintegrated_seuratObjects_TFH.rds")
+cells.to.remove <- unique(c(which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,1]) > 50), #TRA chain > 50 aa
+                     which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,2]) > 50))) # TRB chain > 50 aa residues
+if(length(cells.to.remove) > 0) {
+    cells <- rownames(list[[]])
+    cells <- cells[-cells.to.remove]
+    list <- subset(list, cells = cells)
+}
+
+###################################################
+#Generating Seurat Object for individual clonotypes
+###################################################
+
+conga <- CoNGAfy(list,
+                 meta.carry = c("CTaa", "CTgene"))
+
+meta <- list[[]]
+clone.count <- meta %>%
+  group_by(CTaa, TCRB.epitope, TCRA.epitope) %>%
+  summarise(n = n()) %>%
+  as.data.frame()
+
+ID <- clone.count$CTaa
+clone.count <- clone.count[,-1]
+rownames(clone.count) <- ID
+
+conga <- AddMetaData(conga, clone.count)
+saveRDS(conga, "./processedData/conga_tfh_seuratObject.rds")
+
+####################
+#Adding Meta Data
+####################
+
+meta <- list[[]]
+
+CTaa.unique <- unique(meta$CTaa)
+
+for(i in seq_along(CTaa.unique)) {
+  meta.tmp <- meta[meta$CTaa == CTaa.unique[i],]
+  CTaa.tmp <- c(CTaa = unique(meta.tmp$CTaa), 
+                donor = (paste(str_sort(unique(meta.tmp$donor)), collapse = ";")), 
+                tissue = paste(str_sort(unique(meta.tmp$tissue)), collapse = ";"), 
+                timepoint = paste(str_sort(unique(meta.tmp$timepoint)), collapse = ";"), 
+                CD4.annot = paste(str_sort(unique(meta.tmp$CD4.annot)), collapse = ";"), 
+                CD8.annot = paste(str_sort(unique(meta.tmp$CD8.annot)), collapse = ";"),
+                DICE.annot = paste(str_sort(unique(meta.tmp$DICE.labels)), collapse = ";"), 
+                CD8.score = paste(str_sort(unique(meta.tmp$CD8.pos)), collapse = ";"), 
+                sequencing.run <- paste(str_sort(unique(meta.tmp$orig.ident)), collapse = ";"), 
+                clusters <- paste(str_sort(unique(meta.tmp$seurat_clusters)), collapse = ";"))
+  if(i == 1) {
+    CTaa.Library <- CTaa.tmp
+  } else {
+    CTaa.Library <- rbind(CTaa.Library, CTaa.tmp)
+  }
+}
+write.csv(CTaa.Library, "CTaa.tfh.library.csv")
+
+CTaa.Library <- read.csv("CTaa.tfh.library.csv")
+CTaa.Library <- CTaa.Library[,-1]
+aa <- CTaa.Library$CTaa
+CTaa.Library <- CTaa.Library[,-1]
+rownames(CTaa.Library) <- aa
+colnames(CTaa.Library)[8:9] <- c("SequencingRun", "Orig.Cluster")
+
+conga <- AddMetaData(conga, CTaa.Library)
+
+###################################
+#Adding Test TCR sequence informtion
+#####################################
+
+confirming.seq <- list(TCRA = c("CATGLTGGGNKLTF", "CAGQLNRAAGNKLTF", "CIVPRGTGFQKLVF", "CAVRPNAGNNRKLIW", "CAVTGTYKYIF"), 
+                       TCRB = c("CASSMGGGNQPQHF", "CASSPRGTEAFF", "CASSLVGGGPAEAFF", "CASSLGENDEQFF", "CASSQGNRANTEAFF")) 
+
+conga$confirmation.seq <- NA
+for (i in seq_len(5)) {
+  x.pos <- intersect(grep(confirming.seq[[1]][i], conga$CTaa), grep(confirming.seq[[2]][i], conga$CTaa))
+  conga$confirmation.seq[x.pos] <- paste0("TCR.", i)
+}
+
+conga$TRAV <- str_split(conga$CTgene, "[.]", simplify = TRUE)[,1]
+conga$TRAV <- factor(conga$TRAV, levels = str_sort(unique(conga$TRAV), numeric = TRUE))
+conga$TRBV <- str_split(str_split(conga$CTgene, "_", simplify = TRUE)[,2], "[.]", simplify = TRUE)[,1]
+conga$TRBV <- factor(conga$TRBV, levels = str_sort(unique(conga$TRBV), numeric = TRUE))
+
+
+#################################
+#Performing Dimensional Reduction
+#################################
+dimen <- 15
+
+conga <- conga %>% 
+            NormalizeData(verbose = FALSE) %>% 
+            FindVariableFeatures() 
+conga <- Trex::quietTCRgenes(conga)
+conga <- ScaleData(conga, verbose = FALSE) 
+conga <- RunPCA(conga, features = VariableFeatures(conga))
+         
+dem.tmp <- c(1:dimen, 31:(31+dimen-1), 61:(61+dimen-1))
+
+#Calculating mutual neighbor values
+output <- rescaleByNeighbors(
+                  list(conga[["TRA.KF"]]@cell.embeddings[,1:dimen], 
+                      conga[["TRB.KF"]]@cell.embeddings[,1:dimen],
+                      conga[["pca"]]@cell.embeddings[,1:dimen]), 
+                  k = 100)
+
+conga[["KF.corrected"]] <- CreateDimReducObject(
+                                embeddings = as.matrix(output),
+                                stdev = rep(0, ncol(output)),
+                                key = "correctedTrex",
+                                jackstraw = NULL,
+                                misc = list())
+
+#Calculating Phate embeding
+phate.results <- phate(conga[["KF.corrected"]]@cell.embeddings[,1:length(dem.tmp)])
+
+
+        
+        
+conga[["phateTrex"]] <- CreateDimReducObject(
+                                        embeddings = phate.results$embedding,
+                                        stdev = rep(0, 2),
+                                        key = "phateTrex",
+                                        jackstraw = NULL,
+                                        misc = list())
+
+#Calculating Neighbors
+conga <- FindNeighbors(conga, 
+                         reduction = "KF.corrected",
+                         dims = 1:length(dem.tmp),
+                         force.recalc = TRUE,
+                         graph.name = c("T_nn", "T_snn"))
+
+#Calculating Clusters
+nn <- makeKNNGraph(conga@reductions$KF.corrected@cell.embeddings,
+                                               k=20)
+leiden.clusters <- leiden.community(nn, resolution = 0.7, n.iterations = 5)
+
+conga$leiden.clusters <- leiden.clusters$membership
+        
+
+saveRDS(conga, "./processedData/conga_tfh_seuratObject.rds")
+```
+
+
+#Figure 3B
+```{r}
+conga <- readRDS("./processedData/conga_tfh_seuratObject.rds")
+df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
+                  conga[[]])
+
+centers = df %>% 
+          group_by(leiden.clusters) %>% 
+          summarize(across(c(paste0(dimRed[i], "_1"), paste0(dimRed[i], "_2")),mean)) %>%
+          as.data.frame()
+        max.cluster.val <- max(as.numeric(na.omit(df$leiden.clusters)))
+        df$leiden.clusters <- factor(df$leiden.clusters, levels = c(0:max.cluster.val))
+
+mycolors <- colorRampPalette(brewer.pal(12,"Paired"))(length(unique(df$leiden.clusters)))
+
+ggplot() +
+    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = leiden.clusters), 
+               shape =21, stroke = 0.1) + 
+    scale_fill_manual(values = mycolors) + 
+    theme_classic() +
+    geom_text(data = centers, mapping =  aes(x=centers[,2], y = centers[,3], label = leiden.clusters), 
+              color = "black", size = 5) +
+    labs(fill = "cluster") + 
+    theme(axis.title = element_blank())
+
+ggsave("./output/Figure3/Figure3B.png", height = 4, width = 5.75, dpi = 600)
+```
+
+#Figure 3C
+```{r}
+x.features <- c("BCL6", "CXCL13", "CXCR5", "ICOS", "MAF", "PDCD1", "EMP3", "KLF2")
+x <- FeaturePlot(conga, 
+              features = x.features,
+              reduction = "phateTrex",
+            cols = rev(brewer.pal(11, "RdYlBu")), 
+            coord.fixed = FALSE, 
+            combine = FALSE) 
+for(i in seq_along(x)) {
+  x[[i]] <- x[[i]] + 
+    xlim(-0.03,0.05) +
+    ylim(-0.01,0.015) +
+    guides(color = "none") + 
+    theme_void()
+}
+plot_a_list(x,3,2)
+ggsave("./output/Figure3/Figure3C.png", height = 10.67, width = 6.67, dpi = 600)
+```
+
+#Figure 3D
+```{r}
+epitope <- stringr::str_sort(na.omit(unique(df$TCRA.epitope)), numeric = TRUE)
+        
+ep.colors <- rev(brewer.pal(5, "RdYlBu"))[c(1,3,5)]
+names(ep.colors) <- epitope
+
+df$TCRA.epitope <- factor(df$TCRA.epitope, levels = epitope)
+  
+# Plotting the TCRA-specific sequences
+df.sub <- subset(df, !is.na(TCRA.epitope))
+ggplot() +
+  geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n), 
+             fill = "grey", shape =21, stroke = 0.1) + 
+  geom_point(data = df.sub, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = TCRA.epitope), 
+             shape =21, stroke = 0.1) + 
+  scale_fill_manual(values = ep.colors) + 
+  guides(size = "none", fill = "none") + 
+  theme_void()
+  ggsave("./output/Figure3/Figure3D_TRA.png", height = 4, width = 5, dpi = 600)
+
+# Plotting the TCRB-specific sequences
+df$TCRB.epitope <- factor(df$TCRB.epitope, levels = epitope)
+
+df.sub <- subset(df, !is.na(TCRB.epitope))
+ggplot() +
+    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n), 
+               fill = "grey", shape =21, stroke = 0.1) + 
+    geom_point(data = df.sub, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = TCRB.epitope), 
+               shape =21, stroke = 0.1) + 
+    scale_fill_manual(values = ep.colors) + 
+    guides(size = "none", fill = "none") + 
+    theme_void()
+
+ggsave("./output/Figure3/Figure3D_TRB.png", height = 4, width = 5, dpi = 600)
+```
+
+#Figure 3E
+
+```{r}
+library(seqinr)
+
+clusters <- c(0,1,3)
+conga.meta <- conga[[]]
+for(i in seq_along(clusters)) {
+  tmp.meta <- conga.meta[conga.meta$leiden.clusters == clusters[i],]
+  tmp.meta <- tmp.meta[!is.na(tmp.meta$TCRB.epitope) |!is.na(tmp.meta$TCRA.epitope),] 
+  TRB <- str_split(tmp.meta$CTaa, "_", simplify = TRUE)[,2]
+  TRA <- str_split(tmp.meta$CTaa, "_", simplify = TRUE)[,1]
+  align <- msa(TRA, 
+               type = "protein", 
+               maxiters = 30)
+  align2 <- msaConvert(align, type="seqinr::alignment")
+  
+  ggseqlogo(align2$seq, 
+            seq_type='aa', 
+            method='p') 
+  ggsave(paste0("./output/Figure3/Figure3E.Cluster.", clusters[i], ".TRA.pdf"), height =3, width = 4.5)
+  
+    align <- msa(TRB, 
+               type = "protein", 
+               maxiters = 30)
+  align2 <- msaConvert(align, type="seqinr::alignment")
+  
+  ggseqlogo(align2$seq, 
+            seq_type='aa', 
+            method='p') 
+  ggsave(paste0("./output/Figure3/Figure3E.Cluster.", clusters[i], ".TRB.pdf"), height =3, width = 4.5)
+}
+```
+
+
+#Figure 3F
+```{r}
+df.sub <- subset(df, !is.na(confirmation.seq))
+
+ggplot() +
+    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n), 
+               fill = "grey", shape =21, stroke = 0.1) + 
+    geom_point(data = df.sub, aes(x=phateTrex_1, y = phateTrex_2, fill = confirmation.seq), 
+               size = 4, shape =21, stroke = 0.2) + 
+    scale_fill_manual(values = brewer.pal(5, "RdYlBu")) +
+    theme_void() + 
+    guides(fill = "none", size = "none")
+
+ggsave("./output/Figure3/Figure3F.png", height = 4, width = 5, dpi = 600)
+```
+
+############
+#Comparing the cluster output
+
+```{r}
+library(ggthemes)
+conga <- RunUMAP(conga,
+                 reduction = "pca",
+                 dims = 1:25,
+                 n.epochs = 500, 
+                 reduction.key = "rnaUMAP_")
+
+nn <- makeKNNGraph(conga@reductions$TRA.KF@cell.embeddings, k=20)
+leiden.clusters <- leiden.community(nn, resolution = 0.7, n.iterations = 5)
+conga$TRA.clusters <- leiden.clusters$membership
+
+nn <- makeKNNGraph(conga@reductions$TRB.KF@cell.embeddings, k=20)
+leiden.clusters <- leiden.community(nn, resolution = 0.7, n.iterations = 5)
+conga$TRB.clusters <- leiden.clusters$membership
+
+nn <- makeKNNGraph(conga@reductions$pca@cell.embeddings, k=20)
+leiden.clusters <- leiden.community(nn, resolution = 0.7, n.iterations = 5)
+conga$RNA.clusters <- leiden.clusters$membership
+
+
+
+hclust.cluster <- read.csv("./processedData/hclust.TCRdist.leiden.csv")[,2:3]
+knn.cluster <- read.csv("./processedData/knn.TCRdist.leiden.csv")[,2:3]
+alpha.mc <- read.csv("./processedData/alphaMC.TCRdist.leiden.csv")[,2:3]
+
+clusters <- merge(hclust.cluster, knn.cluster, by = 2, all.x = TRUE)
+clusters <- merge(clusters, alpha.mc, by.x = 1, by.y = 2, all.x = TRUE)
+clones <- clusters$clonotype
+clusters <- clusters[,-1]
+rownames(clusters) <- clones
+
+conga <- AddMetaData(conga, clusters)
+
+
+df <- data.frame(conga@reductions$umap@cell.embeddings,
+                  conga[[]])
+
+df.sub <- subset(df, !is.na(confirmation.seq))
+
+ggplot() +
+    geom_point(data =df, aes(x=rnaUMAP_1, y = rnaUMAP_2, size = n), 
+               fill = "grey", shape =21, stroke = 0.1) + 
+    geom_point(data = df.sub, aes(x=rnaUMAP_1, y = rnaUMAP_2, fill = confirmation.seq), 
+               size = 4, shape =21, stroke = 0.2) + 
+    scale_fill_manual(values = rev(brewer.pal(5, "RdYlBu"))) +
+    theme_void() + 
+    guides(fill = "none", size = "none")
+ggsave("./output/TCRsequences.cluster.png", height = 3, width = 4.25, dpi = 600)
+
+
+ggplot() +
+    geom_point(data =df, aes(x=rnaUMAP_1, y = rnaUMAP_2, size = n, fill = RNA.clusters), 
+               shape =21, stroke = 0.1) + 
+    theme_void() + 
+    scale_fill_tableau()
+ggsave("./output/RNA.cluster.png", height = 3, width = 4.25, dpi = 600)
+
+mycolors <- colorRampPalette(brewer.pal(12,"Paired"))(length(unique(df$leiden.clusters)))
+ggplot() +
+    geom_point(data =df, aes(x=rnaUMAP_1, y = rnaUMAP_2, size = n, fill = leiden.clusters), 
+               shape =21, stroke = 0.1) + 
+    theme_void() + 
+    scale_fill_manual(values = mycolors) + 
+  labs(fill='Trex.Cluster')
+ggsave("./output/Trex.cluster.png", height = 3, width = 4.25, dpi = 600)
+
+
+ggplot() +
+    geom_point(data =df, aes(x=rnaUMAP_1, y = rnaUMAP_2, size = n, fill = as.factor(hclust.TCRdist.leiden)), 
+               shape =21, stroke = 0.1) + 
+    theme_void() + 
+    scale_fill_viridis(option = "H", discrete = TRUE) + 
+  labs(fill='TCRdist.Hclust')
+ggsave("./output/Hclust.cluster.png", height = 3, width = 4.35, dpi = 600)
+
+
+ggplot() +
+    geom_point(data =df, aes(x=rnaUMAP_1, y = rnaUMAP_2, size = n, fill = as.factor(knn.TCRdist.leiden)), 
+               shape =21, stroke = 0.1) + 
+    theme_void() + 
+    scale_fill_viridis(option = "B", discrete = TRUE, na.value = "grey") + 
+    guides(fill = "none")
+ggsave("./output/Knn.cluster.png", height = 3, width = 4.25, dpi = 600)
+
+
+ggplot() +
+    geom_point(data =df, aes(x=rnaUMAP_1, y = rnaUMAP_2, size = n, fill = as.factor(alphaMC.TCRdist.leiden)), 
+               shape =21, stroke = 0.1) + 
+    theme_void() + 
+    scale_fill_viridis(option = "B", discrete = TRUE, na.value = "grey") + 
+    guides(fill = "none")
+ggsave("./output/AlphaMC.cluster.png", height = 3, width = 4.25, dpi = 600)
+
+```
+
+
+```{r}
+conga <- annotateDB(conga, 
+                    chains = "TRB")
+conga <- annotateDB(conga, 
+                    chains = "TRA")
+
+
+
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, "NA;")
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, ";NA")
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, "HGNC_Genes;")
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, ";HGNC_Genes")
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, "HGNC_Genes")
+
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, "Malignant neoplasm of brain;")
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, ";Malignant neoplasm of brain")
+conga$TRA_Epitope.species <- stringr::str_remove(conga$TRA_Epitope.species, "Malignant neoplasm of brain")
+conga$TRA_Epitope.species[which(conga$TRA_Epitope.species == "")] <- NA
+
+
+conga$CMV <- NA
+conga$CMV[grepl("CMV", conga$TRA_Epitope.species)] <- "CMV"
+conga$CMV[grepl("CMV", conga$TRB_Epitope.species)] <- "CMV"
+
+conga$Influenza <- NA
+conga$Influenza[grepl("InfluenzaA|Influenza", conga$TRA_Epitope.species)] <- "Influenza"
+conga$Influenza[grepl("InfluenzaA|Influenza", conga$TRB_Epitope.species)] <- "Influenza"
+
+conga$EBV <- NA
+conga$EBV[grepl("EBV", conga$TRA_Epitope.species)] <- "EBV"
+conga$EBV[grepl("EBV", conga$TRB_Epitope.species)] <- "EBV"
+
+conga$SARSCoV2 <- NA
+conga$SARSCoV2[grepl("SARS-CoV-2", conga$TRA_Epitope.species)] <- "SARSCoV2"
+
+conga$M.tuberculosis <- NA
+conga$M.tuberculosis[grepl("M. tuberculosis|M.Tuberculosis|M.tuberculosis", conga$TRA_Epitope.species)] <- "M.tuberculosis"
+conga$M.tuberculosis[grepl("M. tuberculosis|M.Tuberculosis|M.tuberculosis", conga$TRB_Epitope.species)] <- "M.tuberculosis"
+
+conga$Autoimmune <- NA
+conga$Autoimmune[grepl("Psoriatic arthritis|Multiple sclerosis|Celiac disease|Inflammatory bowel disease|Systemic lupus erythematosus|Thyrotoxicosis with diffuse goitre|Churg Strauss syndrome|Diabetes Type 1|Multiple sclerosis (MS)", conga$TRA_Epitope.species)] <- "Autoimmune"
+
+conga$Autoimmune[grepl("Psoriatic arthritis|Multiple sclerosis|Celiac disease|Inflammatory bowel disease|Systemic lupus erythematosus|Thyrotoxicosis with diffuse goitre|Churg Strauss syndrome|Diabetes Type 1|Multiple sclerosis (MS)", conga$TRB_Epitope.species)] <- "Autoimmune"
+
+
+df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
+                  conga[[]])
+
+df <- df[,c("phateTrex_1", "phateTrex_2", "CMV", "SARSCoV2", "M.tuberculosis", "EBV", "Influenza", "Autoimmune")]
+df <- reshape2::melt(df, id.vars = c("phateTrex_1", "phateTrex_2"))
+
+ggplot() +
+ geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2), 
+             fill = "grey", shape =21, stroke = 0.1) + 
+  stat_density_2d(data = subset(df, variable == "Autoimmune" & !is.na(df$value)), aes(x =phateTrex_1, y = phateTrex_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  stat_density_2d(data = subset(df, variable == "CMV" & !is.na(df$value)), aes(x =phateTrex_1, y = phateTrex_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  stat_density_2d(data = subset(df, variable == "SARSCoV2" & !is.na(df$value)), aes(x =phateTrex_1, y = phateTrex_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  stat_density_2d(data = subset(df, variable == "EBV" & !is.na(df$value)), aes(x =phateTrex_1, y = phateTrex_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  stat_density_2d(data = subset(df, variable == "Influenza" & !is.na(df$value)), aes(x =phateTrex_1, y = phateTrex_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  stat_density_2d(data = subset(df, variable == "M.tuberculosis" & !is.na(df$value)), aes(x =phateTrex_1, y = phateTrex_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  facet_wrap(~variable) +
+  guides(fill = "none") + 
+  xlim(-0.02,0.05) + 
+  ylim(-0.015,0.015) + 
+  theme_void() 
+ggsave("Epitope.sample.pdf", height = 5, width = 7.5)
+
+```
+
