@@ -1,0 +1,12 @@
+---
+title: "CoNGA Analysis"
+author: "Nick Borcherding"
+date: "11/10/2022"
+output: html_document
+---
+```{r}
+require(Seurat)
+require(DropletUtils)
+hs1 <- readRDS('~/vdj_v1_hs_V1_sc_5gex.rds')
+```
+
