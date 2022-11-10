@@ -9,16 +9,23 @@ require(Seurat)
 require(DropletUtils)
 library(reticulate)
 dat <- readRDS('./data/processedData/Fullintegrated_seuratObjects_TFH.rds')
+dat <- SplitObject(dat, split.by = "orig.ident")
 ```
 
 # Migrating Seurat data to CoNGA
 ```{r}
-write10xCounts(x = dat@assays$RNA@counts, path = './data/preCoNGA/')
+for (i in seq_along(dat)) {
+    write10xCounts(x = dat[[i]]@assays$RNA@counts,
+                   barcodes = stringr::str_split(colnames(dat[[i]]@assays$RNA@counts), "_", simplify = TRUE)[,2],
+                   type = "HDF5",
+                   path = paste0('./data/preCoNGA/gex/', names(dat)[i], ".h5"))
+}
 ```
 
 # Each contig file must undergo conversion for compatibility
 
-#Ended up writing and running the following bash script: 
+Ended up writing and running the following bash script: 
+
 ```{r, eval = F}
 for i in {11..118};
 do
@@ -30,5 +37,14 @@ python /Users/Nick/conga/scripts/setup_10x_for_conga.py \
 done
 ```
 
+```{r}
+new.contigs <- list.files("./data/preCoNGA/contigs")
+new.contigs <- new.contigs[!grepl("barcode", new.contigs)]
+
+samples <- stringr::str_split(new.contigs, "_", simplify = TRUE)[,1]
+for(i in seq_along(new.contigs)) {
+  tmp <- read.delim(paste0("./data/preCoNGA/contigs/", new.contigs[i]))
+}
+```
 
 
