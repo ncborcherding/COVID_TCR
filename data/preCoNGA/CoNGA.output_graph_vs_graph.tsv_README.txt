@@ -1,0 +1,25 @@
+Graph vs graph analysis looks for correlation between GEX and TCR space
+by finding statistically significant overlap between two similarity graphs,
+one defined by GEX similarity and one by TCR sequence similarity.
+
+Overlap is defined one node (clonotype) at a time by looking for overlap
+between that node's neighbors in the GEX graph and its neighbors in the
+TCR graph. The null model is that the two neighbor sets are chosen
+independently at random.
+
+CoNGA looks at two kinds of graphs: K nearest neighbor (KNN) graphs, where
+K = neighborhood size is specified as a fraction of the number of
+clonotypes (defaults for K are 0.01 and 0.1), and cluster graphs, where
+each clonotype is connected to all the other clonotypes in the same
+(GEX or TCR) cluster. Overlaps are computed 3 ways (GEX KNN vs TCR KNN,
+GEX KNN vs TCR cluster, and GEX cluster vs TCR KNN), for each of the
+K values (called nbr_fracs short for neighbor fractions).
+
+Columns (depend slightly on whether hit is KNN v KNN or KNN v cluster):
+conga_score = P value for GEX/TCR overlap * number of clonotypes
+mait_fraction = fraction of the overlap made up of 'invariant' T cells
+num_neighbors* = size of neighborhood (K)
+cluster_size = size of cluster (for KNN v cluster graph overlaps)
+clone_index = 0-index of clonotype in adata object
+
+    

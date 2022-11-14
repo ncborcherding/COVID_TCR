@@ -47,4 +47,24 @@ for(i in seq_along(new.contigs)) {
 }
 ```
 
+```{r, eval = FALSE}
+
+python /Users/Nick/conga/scripts/merge_samples.py \
+--samples COVID_samples2.txt \
+--output_clones_file merged_COVID_clones.tsv \
+--output_gex_data merged_COVID_gex.h5ad \
+--organism human 
+```
+
+```{r, eval = FALSE}
+
+python /Users/Nick/conga/scripts/run_conga.py \
+--gex_data merged_COVID_gex.h5ad \
+--gex_data_type h5ad \
+--clones_file merged_COVID_clones.tsv \
+--organism human \
+--graph_vs_graph \
+--outfile_prefix ./CoNGA.output \
+--no_kpca
+```
 

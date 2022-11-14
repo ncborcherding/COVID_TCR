@@ -1,0 +1,4 @@
+sys.argv: /Users/Nick/conga/scripts/run_conga.py --gex_data merged_COVID_gex.h5ad --gex_data_type h5ad --clones_file merged_COVID_clones.tsv --organism human --graph_vs_graph --outfile_prefix ./CoNGA.output --no_kpca
+hostname: 3160-AD-05002
+nbr_frac_for_nndists: 0.01
+run_conga took 1.694 minutes
