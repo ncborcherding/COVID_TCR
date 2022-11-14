@@ -68,3 +68,81 @@ python /Users/Nick/conga/scripts/run_conga.py \
 --no_kpca
 ```
 
+```{r}
+ad <- anndata::read_h5ad("./data/preCoNGA/CoNGA.output_final.h5ad")
+meta.data <- data.frame(ad$obs)
+meta.data$CTaa <- paste0(meta.data$cdr3a, "_", meta.data$cdr3b)
+
+meta.data <- unique(meta.data[,c("clusters_gex", "clusters_tcr", "CTaa")])
+
+x <- unique(meta.data$CTaa[which(duplicated(meta.data$CTaa))])
+output <- NULL
+for(i in seq_along(x)) {
+  meta.tmp <- meta.data[meta.data$CTaa == x[i],]
+  clusters_gex <- (paste(str_sort(unique(meta.tmp$clusters_gex)), collapse = ";"))
+  clusters_tcr <- (paste(str_sort(unique(meta.tmp$clusters_tcr)), collapse = ";"))
+  out <- c(clusters_gex, clusters_tcr, x[i])
+  output <- rbind(output,out)
+}
+output <- as.data.frame(output)
+colnames(output) <- c("clusters_gex", "clusters_tcr", "CTaa")
+
+meta.data <- meta.data[-c(which(meta.data$CTaa %in% x)),]
+meta.data <- rbind(meta.data, output)
+rownames(meta.data) <- meta.data$CTaa
+meta.data <- meta.data[,c(1:2)]
+
+
+tfh <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
+tfh <- AddMetaData(tfh, meta.data)
+tfh$clusters_gex[grepl(";",tfh$clusters_gex)] <- "Multi"
+
+
+
+tfh$clusters_tcr <- factor(tfh$clusters_tcr, levels = 0:15)
+tfh$clusters_gex <- factor(tfh$clusters_gex, levels = c(0:13, "Multi"))
+DimPlot(tfh)
+DimPlot(tfh, group.by = "clusters_tcr")
+
+
+DimPlot(tfh, group.by = "clusters_gex", reduction = "phateTrex")
+DimPlot(tfh, group.by = "clusters_tcr", reduction = "phateTrex")
+
+df <- data.frame(prop.table(table(tfh$clusters_tcr, tfh$TCRA.epitope, useNA = "ifany"), margin = 1))
+
+epitope <- stringr::str_sort(na.omit(unique(tfh$TCRA.epitope)), numeric = TRUE)
+        
+ep.colors <- rev(brewer.pal(5, "RdYlBu"))[c(1,3,5)]
+names(ep.colors) <- epitope
+
+ggplot(df, aes(x= Var1, y = Freq)) + 
+  geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
+  scale_fill_manual(values = ep.colors, na.value = "grey") + 
+  theme_classic()
+
+
+df <- data.frame(prop.table(table(tfh$clusters_gex, tfh$TCRA.epitope, useNA = "ifany"), margin = 1))
+
+epitope <- stringr::str_sort(na.omit(unique(tfh$TCRA.epitope)), numeric = TRUE)
+        
+ep.colors <- rev(brewer.pal(5, "RdYlBu"))[c(1,3,5)]
+names(ep.colors) <- epitope
+
+ggplot(df, aes(x= Var1, y = Freq)) + 
+  geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
+  scale_fill_manual(values = ep.colors, na.value = "grey") + 
+  theme_classic()
+
+df <- data.frame(prop.table(table(tfh$leiden.clusters, tfh$TCRA.epitope, useNA = "ifany"), margin = 1))
+
+epitope <- stringr::str_sort(na.omit(unique(tfh$TCRA.epitope)), numeric = TRUE)
+        
+ep.colors <- rev(brewer.pal(5, "RdYlBu"))[c(1,3,5)]
+names(ep.colors) <- epitope
+
+ggplot(df, aes(x= Var1, y = Freq)) + 
+  geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
+  scale_fill_manual(values = ep.colors, na.value = "grey") + 
+  theme_classic()
+```
+
