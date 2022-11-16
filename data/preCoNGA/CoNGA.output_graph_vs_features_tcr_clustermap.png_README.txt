@@ -1,0 +1,38 @@
+This plot shows the distribution of significant
+    features from graph-vs-features or HotSpot analysis plotted across the
+    TCR landscape. Rows are features and columns are
+    individual clonotypes. Columns are ordered by hierarchical clustering
+    (if a dendrogram is present above the heatmap) or by a 1D UMAP projection
+    (used for very large datasets or if 'X_pca_tcr' is not present in
+    adata.obsm_keys()). Rows are ordered by hierarchical clustering with
+    a correlation metric.
+
+    The row colors to the left of the heatmap show the feature type
+    (blue=TCR, orange=GEX). The row colors to the left of those
+    indicate the strength of the graph-vs-feature correlation
+    (also included in the feature labels to the right of the heatmap;
+    keep in mind that highly significant P values for some features may shift
+    the colorscale so everything else looks dark blue).
+
+    The column colors above the heatmap are TCR clusters
+    (and TCR V/J genes if plotting against the TCR landscape). The text
+    above the column colors provides more info.
+
+    Feature scores are Z-score normalized and then averaged over the
+    K=54 nearest neighbors (0 means no nbr-averaging).
+
+    The 'coolwarm' colormap is centered at Z=0.
+
+    Since features of the same type (GEX or TCR) as the landscape and
+    neighbor graph (ie TCR features) are more highly
+    correlated over graph neighborhoods, their neighbor-averaged scores
+    will show more extreme variation. For this reason, the nbr-averaged
+    scores for these features from the same modality as the landscape
+    itself are downscaled by a factor of
+    rescale_factor_for_self_features=0.33.
+
+    The colormap in the top left is for the Z-score normalized,
+    neighbor-averaged scores (multiply by 3.03
+    to get the color scores for the TCR features).
+
+    

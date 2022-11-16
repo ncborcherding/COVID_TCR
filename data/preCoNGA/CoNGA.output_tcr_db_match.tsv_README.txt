@@ -1,0 +1,25 @@
+This table stores significant matches between
+TCRs in adata and TCRs in the file /Users/Nick/conga/conga/data/new_paired_tcr_db_for_matching_nr.tsv
+
+P values of matches are assigned by turning the raw TCRdist
+score into a P value based on a model of the V(D)J rearrangement
+process, so matches between TCRs that are very far from germline
+(for example) are assigned a higher significance.
+
+Columns:
+
+tcrdist: TCRdist distance between the two TCRs (adata query and db hit)
+
+pvalue_adj: raw P value of the match * num query TCRs * num db TCRs
+
+fdr_value: Benjamini-Hochberg FDR value for match
+
+clone_index: index within adata of the query TCR clonotype
+
+db_index: index of the hit in the database being matched
+
+va,ja,cdr3a,vb,jb,cdr3b
+
+db_XXX: where XXX is a field in the literature database
+
+    

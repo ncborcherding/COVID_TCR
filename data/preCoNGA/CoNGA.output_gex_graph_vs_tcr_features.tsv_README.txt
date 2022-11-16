@@ -1,0 +1,29 @@
+
+    This table has results from a graph-vs-features analysis in which we
+    look at the distribution of a set of TCR-defined features over the GEX
+    neighbor graph. We look for neighborhoods in the graph that have biased
+    score distributions, as assessed by a ttest first, for speed, and then
+    by a mannwhitneyu test for nbrhood/score combinations whose ttest P-value
+    passes an initial threshold (default is 10* the pvalue threshold).
+
+    Each row of the table represents a single significant association, in other
+    words a neighborhood (defined by the central clonotype index) and a
+    tcr feature.
+
+    The columns are as follows:
+
+    ttest_pvalue_adj= ttest_pvalue * number of comparisons
+    ttest_stat= ttest statistic (sign indicates where feature is up or down)
+    mwu_pvalue_adj= mannwhitney-U P-value * number of comparisons
+    gex_cluster= the consensus GEX cluster of the clonotypes w/ biased scores
+    tcr_cluster= the consensus TCR cluster of the clonotypes w/ biased scores
+    num_fg= the number of clonotypes in the neighborhood (including center)
+    mean_fg= the mean value of the feature in the neighborhood
+    mean_bg= the mean value of the feature outside the neighborhood
+    feature= the name of the TCR score
+    mait_fraction= the fraction of the skewed clonotypes that have an invariant
+        TCR
+    clone_index= the index in the anndata dataset of the clonotype that is the
+        center of the neighborhood.
+
+    

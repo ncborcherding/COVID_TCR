@@ -1,0 +1,7 @@
+These are TCRdist hierarchical clustering trees
+for the GEX clusters (cluster assignments stored in
+adata.obs['clusters_gex']). The trees are colored by CoNGA score
+with a color score range of 5.45e+01 (blue) to 5.45e-08 (red).
+For coloring, CoNGA scores are log-transformed, negated, and square-rooted
+(with an offset in there, too, roughly speaking).
+

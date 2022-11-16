@@ -1,0 +1,24 @@
+ Find GEX (TCR) features that show a biased
+    distribution across the TCR (GEX) neighbor graph,
+    using a simplified version of the Hotspot method
+    from the Yosef lab.
+
+    DeTomaso, D., & Yosef, N. (2021).
+    "Hotspot identifies informative gene modules across modalities
+    of single-cell genomics."
+    Cell Systems, 12(5), 446–456.e9.
+
+    PMID:33951459
+
+    Columns:
+
+    Z: HotSpot Z statistic
+
+    pvalue_adj: Raw P value times the number of tests (crude Bonferroni
+    correction)
+
+    nbr_frac: The K NN nbr fraction used for the neighbor graph construction
+    (nbr_frac = 0.1 means K=0.1*num_clonotypes neighbors)
+
+
+    

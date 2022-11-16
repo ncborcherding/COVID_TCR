@@ -1,0 +1,13 @@
+Graph-versus-feature analysis was used to identify
+a set of TCR features that showed biased distributions
+in GEX neighborhoods. This plot shows the distribution of the
+top-scoring TCR features on the GEX
+UMAP 2D landscape. The features are ranked by 'mwu_pvalue_adj' ie
+Mann-Whitney-Wilcoxon adjusted P value (raw P value * number of comparisons).
+At most 3 features from clonotype neighbhorhoods
+in each (GEX,TCR) cluster pair are shown. The raw scores for each feature
+are averaged over the K nearest neighbors (K is indicated in the lower
+right corner of each panel) for each clonotype. The min and max
+nbr-averaged scores are shown in the upper corners of each panel.
+Points are plotted in order of increasing feature score.
+

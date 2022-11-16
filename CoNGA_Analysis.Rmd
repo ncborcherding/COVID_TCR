@@ -59,6 +59,7 @@ python /Users/Nick/conga/scripts/merge_samples.py \
 ```{r, eval = FALSE}
 
 python /Users/Nick/conga/scripts/run_conga.py \
+--all \
 --gex_data merged_COVID_gex.h5ad \
 --gex_data_type h5ad \
 --clones_file merged_COVID_clones.tsv \
@@ -66,6 +67,28 @@ python /Users/Nick/conga/scripts/run_conga.py \
 --graph_vs_graph \
 --outfile_prefix ./CoNGA.output \
 --no_kpca
+```
+
+
+```{r}
+d <- dist(tfh@reductions$pca@cell.embeddings)
+# Run the MDS procedure, k determines the number of dimensions
+mds <- cmdscale(d = d, k = 2)
+# cmdscale returns the cell embeddings, we first label the columns to ensure downstream
+# consistency
+colnames(mds) <- paste0("MDS_", 1:2)
+
+mds <- as.data.frame(mds)
+
+ggplot(mds, aes(x=mds[,1], y = mds[,2])) + 
+  geom_point(aes(color = tfh$seurat_clusters))
+# We will now store this as a custom dimensional reduction called 'mds'
+pbmc[["mds"]] <- CreateDimReducObject(embeddings = mds, key = "MDS_", assay = DefaultAssay(pbmc))
+
+# We can now use this as you would any other dimensional reduction in all downstream functions
+DimPlot(pbmc, reduction = "mds", pt.size = 0.5)
+
+plot(mds[,1], mds[,2])
 ```
 
 ```{r}

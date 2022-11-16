@@ -1,0 +1,16 @@
+HotSpot analysis (Nir Yosef lab, PMID: 33951459)
+was used to identify a set of GEX (TCR) features that showed biased
+distributions in TCR (GEX) space. This plot shows the distribution of the
+top-scoring HotSpot features on the GEX
+UMAP 2D landscape. The features are ranked by adjusted P value
+(raw P value * number of comparisons). The raw scores for each feature
+are averaged over the K nearest neighbors (K is indicated in the lower
+right corner of each panel) for each clonotype. The min and max
+nbr-averaged scores are shown in the upper corners of each panel.
+
+Features are filtered based on correlation coefficient to reduce
+redundancy: if a feature has a correlation of >= 0.9
+(the max_feature_correlation argument to conga.plotting.plot_hotspot_umap)
+to a previously plotted feature, that feature is skipped.
+Points are plotted in order of increasing feature score
+

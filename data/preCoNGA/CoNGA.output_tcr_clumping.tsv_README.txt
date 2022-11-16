@@ -1,0 +1,19 @@
+ This table stores the results of the TCR "clumping"
+analysis, which looks for neighborhoods in TCR space with more TCRs than
+expected by chance under a simple null model of VDJ rearrangement.
+
+For each TCR in the dataset, we count how many TCRs are within a set of
+fixed TCRdist radii (defaults: 24,48,72,96), and compare that number
+to the expected number given the size of the dataset using the poisson
+model. Inspired by the ALICE and TCRnet methods.
+
+Columns:
+clump_type='global' unless we are optionally looking for TCR clumps within
+   the individual GEX clusters
+num_nbrs = neighborhood size (number of other TCRs with TCRdist<nbr_radius)
+pvalue_adj= raw Poisson P value of the neighborhood size multiplied by
+   the number of TCRs in the dataset and the number of radii
+clonotype_fdr_value= Benjamin-Hochberg FDR value for the per-TCR
+   significance (ie, looking at all the radii).
+
+    

@@ -1,0 +1,33 @@
+
+    This table has results from a graph-vs-features analysis in which we
+    look for genes that are differentially expressed (elevated) in specific
+    neighborhoods of the TCR neighbor graph. Differential expression is
+    assessed by a ttest first, for speed, and then
+    by a mannwhitneyu test for nbrhood/score combinations whose ttest P-value
+    passes an initial threshold (default is 10* the pvalue threshold).
+
+    Each row of the table represents a single significant association, in other
+    words a neighborhood (defined by the central clonotype index) and a
+    gene.
+
+    The columns are as follows:
+
+    ttest_pvalue_adj= ttest_pvalue * number of comparisons
+    mwu_pvalue_adj= mannwhitney-U P-value * number of comparisons
+    log2enr = log2 fold change of gene in neighborhood (will be positive)
+    gex_cluster= the consensus GEX cluster of the clonotypes w/ biased scores
+    tcr_cluster= the consensus TCR cluster of the clonotypes w/ biased scores
+    num_fg= the number of clonotypes in the neighborhood (including center)
+    mean_fg= the mean value of the feature in the neighborhood
+    mean_bg= the mean value of the feature outside the neighborhood
+    feature= the name of the gene
+    mait_fraction= the fraction of the skewed clonotypes that have an invariant
+        TCR
+    clone_index= the index in the anndata dataset of the clonotype that is the
+        center of the neighborhood.
+
+    
+        In this analysis the TCR graph is defined by
+        connecting all clonotypes that have the same VA/JA/VB/JB-gene segment
+        (it's run four times, once with each gene segment type)
+        

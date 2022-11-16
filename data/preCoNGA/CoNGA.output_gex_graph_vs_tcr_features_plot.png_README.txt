@@ -1,0 +1,21 @@
+This plot summarizes the results of a graph
+versus features analysis by labeling the clonotypes at the center of
+each biased neighborhood with the name of the feature biased in that
+neighborhood. The feature names are drawn in colored boxes whose
+color is determined by the strength and direction of the feature score bias
+(from bright red for features that are strongly elevated to bright blue
+for features that are strongly decreased in the corresponding neighborhoods,
+relative to the rest of the dataset).
+
+At most one feature (the top scoring) is shown for each clonotype
+(ie, neighborhood). The UMAP xy coordinates for this plot are
+stored in adata.obsm['X_gex_2d']. The score used for ranking correlations
+is 'mwu_pvalue_adj'. The threshold score for displaying a feature is
+1.0. The feature column is 'feature'. Since
+we also run graph-vs-features using "neighbor" graphs that are defined
+by clusters, ie where each clonotype is connected to all the other
+clonotypes in the same cluster, some biased features may be associated with
+a cluster rather than a specific clonotype. Those features are labeled with
+a '*' at the end and shown near the centroid of the clonotypes belonging
+to that cluster.
+

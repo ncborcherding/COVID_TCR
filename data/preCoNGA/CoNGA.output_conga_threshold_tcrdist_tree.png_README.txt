@@ -1,0 +1,7 @@
+This is a TCRdist hierarchical clustering tree
+for the clonotypes with CoNGA score less than 10.0.
+The tree is colored by CoNGA score
+with a color score range of 1.00e+01 (blue) to 1.00e-08 (red).
+For coloring, CoNGA scores are log-transformed, negated, and square-rooted
+(with an offset in there, too, roughly speaking).
+
