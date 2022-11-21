@@ -93,6 +93,7 @@ plot(mds[,1], mds[,2])
 
 ```{r}
 ad <- anndata::read_h5ad("./data/preCoNGA/CoNGA.output_final.h5ad")
+
 meta.data <- data.frame(ad$obs)
 meta.data$CTaa <- paste0(meta.data$cdr3a, "_", meta.data$cdr3b)
 
@@ -116,56 +117,126 @@ rownames(meta.data) <- meta.data$CTaa
 meta.data <- meta.data[,c(1:2)]
 
 
-tfh <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
-tfh <- AddMetaData(tfh, meta.data)
-tfh$clusters_gex[grepl(";",tfh$clusters_gex)] <- "Multi"
+conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 
+output <- rescaleByNeighbors(
+                  list(conga[["TRA.KF"]]@cell.embeddings[,1:30], 
+                      conga[["TRB.KF"]]@cell.embeddings[,1:30]),
+                  k = 100)
 
+conga[["KF.only"]] <- CreateDimReducObject(
+                                embeddings = as.matrix(output),
+                                stdev = rep(0, ncol(output)),
+                                key = "correctedTrex",
+                                jackstraw = NULL,
+                                misc = list())
+conga <- FindNeighbors(conga, 
+                       reduction = "KF.only", 
+                       graph.name = c("KF_nn", "KF_snn"))
+conga <- FindClusters(conga, 
+                      algorithm = 4, 
+                      graph.name = "KF_snn", 
+                      resolution = 0.3)
 
-tfh$clusters_tcr <- factor(tfh$clusters_tcr, levels = 0:15)
-tfh$clusters_gex <- factor(tfh$clusters_gex, levels = c(0:13, "Multi"))
-DimPlot(tfh)
-DimPlot(tfh, group.by = "clusters_tcr")
+conga <- RunUMAP(conga, 
+                 dims = 1:60,
+                 reduction = "KF.only", 
+                      graph.name = "KFumap")
 
+conga<- AddMetaData(conga, meta.data)
+conga$clusters_gex[grepl(";",conga$clusters_gex)] <- "Multi"
 
-DimPlot(tfh, group.by = "clusters_gex", reduction = "phateTrex")
-DimPlot(tfh, group.by = "clusters_tcr", reduction = "phateTrex")
+conga$clusters_tcr <- factor(conga$clusters_tcr, levels = 0:15)
+conga$clusters_gex <- factor(conga$clusters_gex, levels = c(0:13, "Multi"))
 
-df <- data.frame(prop.table(table(tfh$clusters_tcr, tfh$TCRA.epitope, useNA = "ifany"), margin = 1))
-
-epitope <- stringr::str_sort(na.omit(unique(tfh$TCRA.epitope)), numeric = TRUE)
+epitope <- stringr::str_sort(na.omit(unique(conga$TCRA.epitope)), numeric = TRUE)
         
 ep.colors <- rev(brewer.pal(5, "RdYlBu"))[c(1,3,5)]
 names(ep.colors) <- epitope
 
-ggplot(df, aes(x= Var1, y = Freq)) + 
-  geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
-  scale_fill_manual(values = ep.colors, na.value = "grey") + 
-  theme_classic()
+conga$TCRA.epitope <- factor(conga$TCRA.epitope, levels = epitope)
 
 
-df <- data.frame(prop.table(table(tfh$clusters_gex, tfh$TCRA.epitope, useNA = "ifany"), margin = 1))
 
-epitope <- stringr::str_sort(na.omit(unique(tfh$TCRA.epitope)), numeric = TRUE)
+
+
+
+tcrdist <- data.frame(ad$obsm$X_gex_2d, CTaa = paste0(ad$obs$cdr3a, "_", ad$obs$cdr3b))
+meta <- conga[[]]
+tcrdist <- merge(tcrdist, meta, by = "CTaa")
+
+
+
+centers = tcrdist %>% 
+          group_by(clusters_gex) %>% 
+          summarize(across(c("X1", "X2"),mean)) %>%
+          as.data.frame()
+
+centers <-  centers[-15,]
         
-ep.colors <- rev(brewer.pal(5, "RdYlBu"))[c(1,3,5)]
-names(ep.colors) <- epitope
 
-ggplot(df, aes(x= Var1, y = Freq)) + 
-  geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
-  scale_fill_manual(values = ep.colors, na.value = "grey") + 
+gex.clusters <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
+                  geom_point(aes(color = clusters_gex)) +
+                  geom_text(data = centers, mapping =  aes(x=centers[,2], y = centers[,3], label = clusters_gex), 
+                              color = "black", size = 5) + 
+                  scale_color_tableau("Tableau 20")  +
+                  guides(color = "none") + 
+                  xlab("gexUMAP_1") + 
+                  ylab("gexUMAP_2") + 
+                  theme_classic()
+
+epitope <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
+  geom_point(color = "grey") + 
+  geom_point(data = subset(tcrdist, !is.na(TCRA.epitope)), 
+             mapping = aes(color = TCRA.epitope)) + 
+  xlab("gexUMAP_1") + 
+  ylab("gexUMAP_2") + 
+  scale_color_manual(values = ep.colors) + 
   theme_classic()
 
-df <- data.frame(prop.table(table(tfh$leiden.clusters, tfh$TCRA.epitope, useNA = "ifany"), margin = 1))
+Trex.cluster <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
+                    geom_point(aes(color = KF_snn_res.0.3)) + 
+                    scale_color_tableau("Tableau 20") +
+                    xlab("gexUMAP_1") + 
+                    ylab("gexUMAP_2") + 
+                    guides(color=guide_legend(ncol=2))   + 
+                    labs(color = "Trex Cluster") + 
+                    theme_classic()
 
-epitope <- stringr::str_sort(na.omit(unique(tfh$TCRA.epitope)), numeric = TRUE)
-        
-ep.colors <- rev(brewer.pal(5, "RdYlBu"))[c(1,3,5)]
-names(ep.colors) <- epitope
+conga.cluster <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
+  geom_point(aes(color = clusters_tcr)) + 
+  scale_color_tableau("Tableau 20")  +
+  guides(color=guide_legend(ncol=2)) + 
+  labs(color = "CoNGA Cluster") + 
+  xlab("gexUMAP_1") + 
+  ylab("gexUMAP_2") + 
+  theme_classic()
 
-ggplot(df, aes(x= Var1, y = Freq)) + 
+df1 <- data.frame(prop.table(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
+
+trex.break <- ggplot(df1, aes(x= Var1, y = Freq)) + 
   geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
   scale_fill_manual(values = ep.colors, na.value = "grey") + 
-  theme_classic()
+  theme_classic() + 
+  scale_x_discrete(limits = rev) + 
+  ylab("Relative Proportion")  + 
+  guides(fill = "none") +
+  coord_flip() + 
+  theme(axis.title.y = element_blank())
+
+df2 <- data.frame(prop.table(table(tcrdist$clusters_tcr, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
+conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) + 
+                geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
+                scale_fill_manual(values = ep.colors, na.value = "grey") + 
+                theme_classic() + 
+                scale_x_discrete(limits = rev) + 
+                labs(fill = "Spike Epitopes") + 
+                ylab("Relative Proportion") + 
+                guides(fill = "none") +
+                coord_flip() + 
+                theme(axis.title.y = element_blank())
+
+gex.clusters + conga.cluster + conga.break + epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
+ggsave("conga.attempt1.png", height = 8, width = 13)
 ```
 
