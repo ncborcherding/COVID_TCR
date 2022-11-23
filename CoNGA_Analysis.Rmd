@@ -133,15 +133,13 @@ conga[["KF.only"]] <- CreateDimReducObject(
 conga <- FindNeighbors(conga, 
                        reduction = "KF.only", 
                        graph.name = c("KF_nn", "KF_snn"))
+
+
 conga <- FindClusters(conga, 
                       algorithm = 4, 
                       graph.name = "KF_snn", 
                       resolution = 0.3)
 
-conga <- RunUMAP(conga, 
-                 dims = 1:60,
-                 reduction = "KF.only", 
-                      graph.name = "KFumap")
 
 conga<- AddMetaData(conga, meta.data)
 conga$clusters_gex[grepl(";",conga$clusters_gex)] <- "Multi"
@@ -157,16 +155,76 @@ names(ep.colors) <- epitope
 conga$TCRA.epitope <- factor(conga$TCRA.epitope, levels = epitope)
 
 
-
-
-
+###################
+#Direct Comparison
+###################
 
 tcrdist <- data.frame(ad$obsm$X_gex_2d, CTaa = paste0(ad$obs$cdr3a, "_", ad$obs$cdr3b))
+"%!in%" <- Negate("%in%")
+
+
+
+
+conga.nn.idx <- apply(conga.sparse[], 
+                      1, 
+                      function(x) which(x > 0) )
+
+conga.nn.idx <- data.frame(lapply(conga.nn.idx, function(x) {
+  x <- unlist(x)
+  length(x) <- max(lengths(conga.nn.idx))
+  return(x)
+}))
+conga.nn.idx <- as.data.frame(t(conga.nn.idx))
+rownames(conga.nn.idx) <- NULL
+conga.nn.idx$CTaa <- tcrdist$CTaa
+dupl.barcodes <- conga.nn.idx$CTaa[which(duplicated(conga.nn.idx$CTaa))]
+#conga.nn.idx <- conga.nn.idx[conga.nn.idx$CTaa %!in% dupl.barcodes,]
+
+conga$dupl.barcodes <- "No"
+conga$dupl.barcodes[conga$CTaa %in% dupl.barcodes] <- "Yes"
+subset.conga <- subset(subset.conga, CTaa %in% conga.nn.idx$CTaa)
+subset.conga <- FindNeighbors(subset.conga, 
+                              reduction = "KF.only", 
+                              k.param = 11, 
+                              return.neighbor = TRUE)
+Trex.nn.idx <- as.data.frame(subset.conga@neighbors$RNA.nn@nn.idx[,2:11])
+Trex.nn.idx$CTaa <- subset.conga$CTaa
+
+clones <- unique(Trex.nn.idx$CTaa)
+output.JI <- NULL
+output.DI <- NULL
+for (i in seq_along(clones)) {
+  
+  Trex.tmp <- as.numeric(Trex.nn.idx[Trex.nn.idx$CTaa == clones[i],1:10])
+  Trex.nn <- Trex.nn.idx$CTaa[Trex.tmp]
+  
+  cg.tmp <- as.numeric(conga.nn.idx[conga.nn.idx$CTaa == clones[i],1:10])
+  conga.nn <- conga.nn.idx$CTaa[cg.tmp]
+  numerator <- length(intersect(Trex.nn, conga.nn))
+  denominator <- length(unique(conga.nn, Trex.nn))
+  if (numerator > 0) {
+    sub <- length(which(conga.nn.idx$CTaa[cg.tmp] %!in% Trex.nn.idx$CTaa))
+    if(sub > 0) {
+      denominator <- denominator-sub
+    }
+  }
+  JI <- numerator/denominator
+  DI <- 2*(numerator)/(length(which(conga.nn.idx$CTaa[cg.tmp] %in% Trex.nn.idx$CTaa)) + length(Trex.nn))
+  output.JI <- c(output.JI, JI)
+  output.DI <- c(output.DI, DI)
+}
+
+JI <- data.frame(row.names = Trex.nn.idx$CTaa, JI.idx = output.JI, DI.idx = output.DI)
+conga <- AddMetaData(conga, JI)
+
+
 meta <- conga[[]]
 tcrdist <- merge(tcrdist, meta, by = "CTaa")
 
 
-
+#################
+#Gex Based Cluster
+#################
 centers = tcrdist %>% 
           group_by(clusters_gex) %>% 
           summarize(across(c("X1", "X2"),mean)) %>%
@@ -194,6 +252,30 @@ epitope <- ggplot(tcrdist, aes(x= X1, y = X2)) +
   scale_color_manual(values = ep.colors) + 
   theme_classic()
 
+epitope.JI <- ggplot(tcrdist, aes(x= 1, y = JI.idx)) + 
+  geom_boxplot(outlier.alpha = 0, fill = "grey") + 
+  geom_jitter(data = subset(tcrdist, !is.na(TCRA.epitope)), 
+             mapping = aes(color = TCRA.epitope)) + 
+  scale_color_manual(values = ep.colors) + 
+  theme_classic() + 
+  guides(color = "none") + 
+  ylab("Jacard Index of KNN") + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.ticks.x = element_blank())
+
+epitope.DI <- ggplot(tcrdist, aes(x= 1, y = DI.idx)) + 
+  geom_boxplot(outlier.alpha = 0, fill = "grey") + 
+  geom_jitter(data = subset(tcrdist, !is.na(TCRA.epitope)), 
+             mapping = aes(color = TCRA.epitope)) + 
+  scale_color_manual(values = ep.colors) + 
+  theme_classic() + 
+  guides(color = "none") + 
+  ylab("Dice Index of KNN") + 
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.ticks.x = element_blank())
+
 Trex.cluster <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
                     geom_point(aes(color = KF_snn_res.0.3)) + 
                     scale_color_tableau("Tableau 20") +
@@ -213,9 +295,12 @@ conga.cluster <- ggplot(tcrdist, aes(x= X1, y = X2)) +
   theme_classic()
 
 df1 <- data.frame(prop.table(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
+df1.1 <- data.frame(sum = rowSums(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany")))
+df1.1$Var1 <- rownames(df1.1)
 
 trex.break <- ggplot(df1, aes(x= Var1, y = Freq)) + 
   geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
+  geom_text(df1.1, mapping = aes(label = sum, x = Var1, y = 1.1),  size = 2) + 
   scale_fill_manual(values = ep.colors, na.value = "grey") + 
   theme_classic() + 
   scale_x_discrete(limits = rev) + 
@@ -225,8 +310,12 @@ trex.break <- ggplot(df1, aes(x= Var1, y = Freq)) +
   theme(axis.title.y = element_blank())
 
 df2 <- data.frame(prop.table(table(tcrdist$clusters_tcr, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
+df2.1 <- data.frame(sum = rowSums(table(tcrdist$clusters_tcr, tcrdist$TCRA.epitope, useNA = "ifany")))
+df2.1$Var1 <- rownames(df2.1)
+
 conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) + 
                 geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
+                geom_text(df2.1, mapping = aes(label = sum, x = Var1, y = 1.1), size = 2) + 
                 scale_fill_manual(values = ep.colors, na.value = "grey") + 
                 theme_classic() + 
                 scale_x_discrete(limits = rev) + 
@@ -236,7 +325,32 @@ conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) +
                 coord_flip() + 
                 theme(axis.title.y = element_blank())
 
-gex.clusters + conga.cluster + conga.break + epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
-ggsave("conga.attempt1.png", height = 8, width = 13)
+gex.clusters + conga.cluster + + epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
+
+epitope + (epitope.JI + epitope.DI) / (trex.break + conga.break)
+
+ggsave("conga.epitope1.png", height = 6, width = 14)
+
+ggplot(tcrdist, aes(x= X1, y = X2)) + 
+                    stat_density_2d(
+                      geom = "polygon", 
+                      bins = 25,
+                      aes(fill = stat(level))) +
+                    facet_wrap(~clusters_tcr) +
+                    xlab("gexUMAP_1") + 
+                    ylab("gexUMAP_2") + 
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+                    theme_classic()
+                    
+                    ggplot(tcrdist, aes(x= X1, y = X2)) + 
+                    stat_density_2d(
+                      geom = "polygon", 
+                      bins = 25,
+                      aes(fill = stat(level))) +
+                    facet_wrap(~KF_snn_res.0.3) +
+                    xlab("gexUMAP_1") + 
+                    ylab("gexUMAP_2") + 
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+                    theme_classic()
 ```
 
