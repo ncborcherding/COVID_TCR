@@ -779,6 +779,8 @@ ggplot(ES2, aes(x=seurat_clusters, y = normalize(HALLMARK_TNFA_SIGNALING_VIA_NFK
 
 ggsave("./output/Figure2/TNFsignaling.pdf", height = 2.75, width = 4)
 ```
+
+
 ```{r}
 DimPlot(tfh, group.by = "cloneType") + 
   scale_color_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(4)[c(1,2,4)]) + 
@@ -834,8 +836,15 @@ ggsave("./output/Figure2/Figure2E.1_TFHonly.png", height = 3.5, width = 4, dpi =
 
 
 tfh.28 <- subset(tfh, timepoint == "d28")
+
 circles <- getCirclize(tfh.28, 
                        group.by = "ident")
+
+compareClonotypes(tfh.28, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
 
 #Just assigning the normal colors to each cluster
 grid.cols <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(tfh$seurat_clusters)))
@@ -856,6 +865,12 @@ tfh.60 <- subset(tfh, timepoint == "d60")
 circles <- getCirclize(tfh.60, 
                        group.by = "ident")
 
+compareClonotypes(tfh.60, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
+
 pdf("./output/Figure2/tfh.d60.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
@@ -869,6 +884,12 @@ tfh.110 <- subset(tfh, timepoint == "d110")
 circles <- getCirclize(tfh.110, 
                        group.by = "ident")
 
+compareClonotypes(tfh.110, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
+
 pdf("./output/Figure2/tfh.d110.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
@@ -880,11 +901,22 @@ dev.off()
 
 
 tfh.201 <- subset(tfh, timepoint == "d201")
+compareClonotypes(tfh.201, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
+
 circles <- getCirclize(tfh.201, 
                        group.by = "ident")
 
+
 pdf("./output/Figure2/tfh.d201.pdf", height = 4, width = 4)
-circlize::chordDiagram(circles,
+compareClonotypes(tfh.110, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) circlize::chordDiagram(circles,
                        self.link = 1, 
                        grid.col = grid.cols, 
                        directional = 1,
