@@ -70,26 +70,6 @@ python /Users/Nick/conga/scripts/run_conga.py \
 ```
 
 
-```{r}
-d <- dist(tfh@reductions$pca@cell.embeddings)
-# Run the MDS procedure, k determines the number of dimensions
-mds <- cmdscale(d = d, k = 2)
-# cmdscale returns the cell embeddings, we first label the columns to ensure downstream
-# consistency
-colnames(mds) <- paste0("MDS_", 1:2)
-
-mds <- as.data.frame(mds)
-
-ggplot(mds, aes(x=mds[,1], y = mds[,2])) + 
-  geom_point(aes(color = tfh$seurat_clusters))
-# We will now store this as a custom dimensional reduction called 'mds'
-pbmc[["mds"]] <- CreateDimReducObject(embeddings = mds, key = "MDS_", assay = DefaultAssay(pbmc))
-
-# We can now use this as you would any other dimensional reduction in all downstream functions
-DimPlot(pbmc, reduction = "mds", pt.size = 0.5)
-
-plot(mds[,1], mds[,2])
-```
 
 ```{r}
 ad <- anndata::read_h5ad("./data/preCoNGA/CoNGA.output_final.h5ad")
@@ -164,7 +144,7 @@ tcrdist <- data.frame(ad$obsm$X_gex_2d, CTaa = paste0(ad$obs$cdr3a, "_", ad$obs$
 
 
 
-
+conga.sparse <- ad$obsp$connectivities
 conga.nn.idx <- apply(conga.sparse[], 
                       1, 
                       function(x) which(x > 0) )
@@ -178,11 +158,11 @@ conga.nn.idx <- as.data.frame(t(conga.nn.idx))
 rownames(conga.nn.idx) <- NULL
 conga.nn.idx$CTaa <- tcrdist$CTaa
 dupl.barcodes <- conga.nn.idx$CTaa[which(duplicated(conga.nn.idx$CTaa))]
-#conga.nn.idx <- conga.nn.idx[conga.nn.idx$CTaa %!in% dupl.barcodes,]
+conga.nn.idx <- conga.nn.idx[conga.nn.idx$CTaa %!in% dupl.barcodes,]
 
 conga$dupl.barcodes <- "No"
 conga$dupl.barcodes[conga$CTaa %in% dupl.barcodes] <- "Yes"
-subset.conga <- subset(subset.conga, CTaa %in% conga.nn.idx$CTaa)
+subset.conga <- subset(conga, CTaa %in% conga.nn.idx$CTaa)
 subset.conga <- FindNeighbors(subset.conga, 
                               reduction = "KF.only", 
                               k.param = 11, 
@@ -243,6 +223,20 @@ gex.clusters <- ggplot(tcrdist, aes(x= X1, y = X2)) +
                   ylab("gexUMAP_2") + 
                   theme_classic()
 
+#################################
+#Adding TCR candidate Information
+#################################
+
+confirming.seq <- list(TCRA = c("CATGLTGGGNKLTF", "CAGQLNRAAGNKLTF", "CIVPRGTGFQKLVF", "CAVRPNAGNNRKLIW", "CAVTGTYKYIF"), 
+                       TCRB = c("CASSMGGGNQPQHF", "CASSPRGTEAFF", "CASSLVGGGPAEAFF", "CASSLGENDEQFF", "CASSQGNRANTEAFF")) 
+
+tcrdist$confirmation.seq <- NA
+for (i in seq_len(5)) {
+  x.pos <- intersect(grep(confirming.seq[[1]][i], tcrdist$CTaa), grep(confirming.seq[[2]][i], tcrdist$CTaa))
+  conga$confirmation.seq[x.pos] <- paste0("TCR.", i)
+}
+
+
 epitope <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
   geom_point(color = "grey") + 
   geom_point(data = subset(tcrdist, !is.na(TCRA.epitope)), 
@@ -297,10 +291,11 @@ conga.cluster <- ggplot(tcrdist, aes(x= X1, y = X2)) +
 df1 <- data.frame(prop.table(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
 df1.1 <- data.frame(sum = rowSums(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany")))
 df1.1$Var1 <- rownames(df1.1)
+df1.1$epitope.sum <- rowSums(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany")[,1:3])
 
 trex.break <- ggplot(df1, aes(x= Var1, y = Freq)) + 
   geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
-  geom_text(df1.1, mapping = aes(label = sum, x = Var1, y = 1.1),  size = 2) + 
+  geom_text(df1.1, mapping = aes(label = paste0(epitope.sum, " | ", sum), x = Var1, y = 1.1),  size = 2) + 
   scale_fill_manual(values = ep.colors, na.value = "grey") + 
   theme_classic() + 
   scale_x_discrete(limits = rev) + 
@@ -312,10 +307,11 @@ trex.break <- ggplot(df1, aes(x= Var1, y = Freq)) +
 df2 <- data.frame(prop.table(table(tcrdist$clusters_tcr, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
 df2.1 <- data.frame(sum = rowSums(table(tcrdist$clusters_tcr, tcrdist$TCRA.epitope, useNA = "ifany")))
 df2.1$Var1 <- rownames(df2.1)
+df2.1$epitope.sum <- rowSums(table(tcrdist$clusters_tcr, tcrdist$TCRA.epitope, useNA = "ifany")[,1:3])
 
 conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) + 
                 geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
-                geom_text(df2.1, mapping = aes(label = sum, x = Var1, y = 1.1), size = 2) + 
+                geom_text(df2.1, mapping = aes(label = paste0(epitope.sum, " | ", sum), x = Var1, y = 1.1),  size = 2) + 
                 scale_fill_manual(values = ep.colors, na.value = "grey") + 
                 theme_classic() + 
                 scale_x_discrete(limits = rev) + 
