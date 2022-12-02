@@ -593,7 +593,7 @@ ggsave("./output/Figure2/Figure2A_TFHonly.pdf", height = 3.5, width = 4, dpi = 6
 ```{r}
 library(patchwork)
 plot <- NULL
-features <- sort(c("BCL6", "CXCR5", "CD274", "ICOS", "CCR7","CD40LG","IL6R","CXCL13", "MKI67", "FOXP3", "IL10", "SELL"))
+features <- sort(c("BCL6", "CXCR5", "CD274", "ICOS", "CCR7","CD40LG","IL21","CXCL13", "IL4", "FOXP3", "IL10", "SELL"))
 for (i in seq_along(features)) {
 
   if(i == 1) {
