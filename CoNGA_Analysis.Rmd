@@ -233,8 +233,10 @@ confirming.seq <- list(TCRA = c("CATGLTGGGNKLTF", "CAGQLNRAAGNKLTF", "CIVPRGTGFQ
 tcrdist$confirmation.seq <- NA
 for (i in seq_len(5)) {
   x.pos <- intersect(grep(confirming.seq[[1]][i], tcrdist$CTaa), grep(confirming.seq[[2]][i], tcrdist$CTaa))
-  conga$confirmation.seq[x.pos] <- paste0("TCR.", i)
+  tcrdist$confirmation.seq[x.pos] <- paste0("TCR.", i)
 }
+
+#TCR1 = c(9,2), TCR2 = c(5,1), TCR3 = c(6,2), TCR4 = c(8,1), TCR5 = c(8,1)
 
 
 epitope <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
@@ -321,7 +323,7 @@ conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) +
                 coord_flip() + 
                 theme(axis.title.y = element_blank())
 
-gex.clusters + conga.cluster + + epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
+gex.clusters + conga.cluster +  epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
 
 epitope + (epitope.JI + epitope.DI) / (trex.break + conga.break)
 
