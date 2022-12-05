@@ -840,11 +840,7 @@ tfh.28 <- subset(tfh, timepoint == "d28")
 circles <- getCirclize(tfh.28, 
                        group.by = "ident")
 
-compareClonotypes(tfh.28, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) 
+
 
 #Just assigning the normal colors to each cluster
 grid.cols <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(tfh$seurat_clusters)))
@@ -865,12 +861,6 @@ tfh.60 <- subset(tfh, timepoint == "d60")
 circles <- getCirclize(tfh.60, 
                        group.by = "ident")
 
-compareClonotypes(tfh.60, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) 
-
 pdf("./output/Figure2/tfh.d60.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
@@ -884,12 +874,6 @@ tfh.110 <- subset(tfh, timepoint == "d110")
 circles <- getCirclize(tfh.110, 
                        group.by = "ident")
 
-compareClonotypes(tfh.110, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) 
-
 pdf("./output/Figure2/tfh.d110.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
@@ -901,11 +885,6 @@ dev.off()
 
 
 tfh.201 <- subset(tfh, timepoint == "d201")
-compareClonotypes(tfh.201, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) 
 
 circles <- getCirclize(tfh.201, 
                        group.by = "ident")
@@ -924,6 +903,32 @@ compareClonotypes(tfh.110,
                        link.arr.type = "big.arrow")
 dev.off()
 
+```
+
+```{r}
+compareClonotypes(tfh.28, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
+
+compareClonotypes(tfh.60, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
+
+compareClonotypes(tfh.110, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
+
+compareClonotypes(tfh.201, 
+                  cloneCall = "CTaa", 
+                  split.by = "seurat_clusters", 
+                  numbers = 10, 
+                  samples = c(3,8)) 
 ```
 
 
