@@ -1,6 +1,3 @@
 To Do List for Trex manuscript:
 * Add TCR candidate visualization somewhere in the comparison of TCR candidates
 * Generate Neighborhoods based on TCRdist and Trex (subtract neighbors with > 1 or 2 edit distances)
-* Figure 2B Final row: IL10, IL21, IL4, SELL
-* Figure 2G Cluster 3,8 spike
-* Figure 2F Shared clonotype characterize
