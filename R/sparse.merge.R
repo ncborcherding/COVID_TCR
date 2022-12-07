@@ -17,7 +17,7 @@ merge.sparse <- function(list) {
     new.mat <- do.call(what = cbind, args = all.mat)
   } else {
     all.mat <- lapply(X = all.mat, FUN = as, Class = "RsparseMatrix")
-    all.names <- unique(x = unlist(x = all.rownames))
+    all.names <- unlist(x = all.rownames) #removed unique() call
     new.mat <- RowMergeMatricesList(
       mat_list = all.mat,
       mat_rownames = all.rownames,

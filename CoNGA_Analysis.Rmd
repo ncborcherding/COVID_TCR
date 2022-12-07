@@ -358,12 +358,12 @@ ggplot(tcrdist, aes(x= X1, y = X2)) +
 library(stringr)
 library(clustringr)
 source("./R/sparse.merge.R")
-TRA <- data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,1], 
-                  VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,1], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,2]))
+TRA <- unique(data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,1], 
+                  VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,1], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,2])))
 TRA.split <- split(TRA, TRA$VJgene)
 
-TRB <- data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,2], 
-                  VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,3], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,5]))
+TRB <- unique(data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,2], 
+                  VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,3], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,5])))
 TRB$VJgene <- str_remove_all(TRB$VJgene, "TRAC_")
 TRB.split <- split(TRB, TRB$VJgene)
 
@@ -385,11 +385,16 @@ for(i in seq_along(TRB.split)) {
                                          method = "lv", 
                                          max_dist = 2)
 }
-TRB.adj.matrix <- list()
-for(i in seq_along(TRB.clust.list)) {
-  TRB.adj.matrix[[i]] <- as(as(as(TRB.clust.list[[i]]$adj_mtx, "dMatrix"), "generalMatrix"), "RsparseMatrix")
+TRA.adj.matrix <- list()
+for(i in seq_along(TRA.clust.list)) {
+  TRA.adj.matrix[[i]] <- as(as(as(TRA.clust.list[[i]]$adj_mtx, "dMatrix"), "generalMatrix"), "RsparseMatrix")
 }
-ADT <- merge.sparse(TRB.adj.matrix)
-x <- as(TRB.clust.list[[i]]$adj_mtx, "dMatrix")
+TRA.sparse <- merge.sparse(TRA.adj.matrix)
+x <- igraph::graph_from_adjacency_matrix(TRA.sparse)
+plot.layout <- layout_with_mds(x)
+plot(x, vertex.label = NA, edge.wdith = 1, layout = plot.layout)
+
+#Need to figure out neighborhood ID
+#Need to Figure out visualizations - add patient info, clone size
 ```
 
