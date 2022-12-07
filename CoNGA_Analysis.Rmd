@@ -118,7 +118,7 @@ conga <- FindNeighbors(conga,
 conga <- FindClusters(conga, 
                       algorithm = 4, 
                       graph.name = "KF_snn", 
-                      resolution = 0.3)
+                      resolution = 0.2)
 
 
 conga<- AddMetaData(conga, meta.data)
@@ -181,7 +181,7 @@ for (i in seq_along(clones)) {
   cg.tmp <- as.numeric(conga.nn.idx[conga.nn.idx$CTaa == clones[i],1:10])
   conga.nn <- conga.nn.idx$CTaa[cg.tmp]
   numerator <- length(intersect(Trex.nn, conga.nn))
-  denominator <- length(unique(conga.nn, Trex.nn))
+  denominator <- length(unique(c(conga.nn, Trex.nn)))
   if (numerator > 0) {
     sub <- length(which(conga.nn.idx$CTaa[cg.tmp] %!in% Trex.nn.idx$CTaa))
     if(sub > 0) {
@@ -290,10 +290,10 @@ conga.cluster <- ggplot(tcrdist, aes(x= X1, y = X2)) +
   ylab("gexUMAP_2") + 
   theme_classic()
 
-df1 <- data.frame(prop.table(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
-df1.1 <- data.frame(sum = rowSums(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany")))
+df1 <- data.frame(prop.table(table(tcrdist$KF_snn_res.0.2, tcrdist$TCRA.epitope, useNA = "ifany"), margin = 1))
+df1.1 <- data.frame(sum = rowSums(table(tcrdist$KF_snn_res.0.2, tcrdist$TCRA.epitope, useNA = "ifany")))
 df1.1$Var1 <- rownames(df1.1)
-df1.1$epitope.sum <- rowSums(table(tcrdist$KF_snn_res.0.3, tcrdist$TCRA.epitope, useNA = "ifany")[,1:3])
+df1.1$epitope.sum <- rowSums(table(tcrdist$KF_snn_res.0.2, tcrdist$TCRA.epitope, useNA = "ifany")[,1:3])
 
 trex.break <- ggplot(df1, aes(x= Var1, y = Freq)) + 
   geom_bar(stat = "identity", position = "fill", aes(fill = Var2)) + 
