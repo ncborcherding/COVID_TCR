@@ -352,3 +352,44 @@ ggplot(tcrdist, aes(x= X1, y = X2)) +
                     theme_classic()
 ```
 
+# Neighborhood calculation
+
+```{r}
+library(stringr)
+library(clustringr)
+source("./R/sparse.merge.R")
+TRA <- data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,1], 
+                  VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,1], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,2]))
+TRA.split <- split(TRA, TRA$VJgene)
+
+TRB <- data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,2], 
+                  VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,3], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,5]))
+TRB$VJgene <- str_remove_all(TRB$VJgene, "TRAC_")
+TRB.split <- split(TRB, TRB$VJgene)
+
+
+TRA.clust.list <- list()
+
+for(i in seq_along(TRB.split)) {
+  TRA.clust.list[[i]] <- cluster_strings(unique(TRA.split[[i]][,1]),
+                                         clean = TRUE,
+                                         method = "lv", 
+                                         max_dist = 2)
+}
+
+TRB.clust.list <- list()
+
+for(i in seq_along(TRB.split)) {
+  TRB.clust.list[[i]] <- cluster_strings(unique(TRB.split[[i]][,1]),
+                                         clean = TRUE,
+                                         method = "lv", 
+                                         max_dist = 2)
+}
+TRB.adj.matrix <- list()
+for(i in seq_along(TRB.clust.list)) {
+  TRB.adj.matrix[[i]] <- as(as(as(TRB.clust.list[[i]]$adj_mtx, "dMatrix"), "generalMatrix"), "RsparseMatrix")
+}
+ADT <- merge.sparse(TRB.adj.matrix)
+x <- as(TRB.clust.list[[i]]$adj_mtx, "dMatrix")
+```
+
