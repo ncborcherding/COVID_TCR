@@ -102,7 +102,7 @@ conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 output <- rescaleByNeighbors(
                   list(conga[["TRA.KF"]]@cell.embeddings[,1:30], 
                       conga[["TRB.KF"]]@cell.embeddings[,1:30]),
-                  k = 100)
+                  k = 50)
 
 conga[["KF.only"]] <- CreateDimReducObject(
                                 embeddings = as.matrix(output),
@@ -157,18 +157,26 @@ conga.nn.idx <- data.frame(lapply(conga.nn.idx, function(x) {
 conga.nn.idx <- as.data.frame(t(conga.nn.idx))
 rownames(conga.nn.idx) <- NULL
 conga.nn.idx$CTaa <- tcrdist$CTaa
-dupl.barcodes <- conga.nn.idx$CTaa[which(duplicated(conga.nn.idx$CTaa))]
-conga.nn.idx <- conga.nn.idx[conga.nn.idx$CTaa %!in% dupl.barcodes,]
+#dupl.barcodes <- conga.nn.idx$CTaa[which(duplicated(conga.nn.idx$CTaa))]
+#conga.nn.idx <- conga.nn.idx[conga.nn.idx$CTaa %!in% dupl.barcodes,]
 
-conga$dupl.barcodes <- "No"
-conga$dupl.barcodes[conga$CTaa %in% dupl.barcodes] <- "Yes"
-subset.conga <- subset(conga, CTaa %in% conga.nn.idx$CTaa)
-subset.conga <- FindNeighbors(subset.conga, 
-                              reduction = "KF.only", 
-                              k.param = 11, 
-                              return.neighbor = TRUE)
-Trex.nn.idx <- as.data.frame(subset.conga@neighbors$RNA.nn@nn.idx[,2:11])
-Trex.nn.idx$CTaa <- subset.conga$CTaa
+#conga$dupl.barcodes <- "No"
+#conga$dupl.barcodes[conga$CTaa %in% dupl.barcodes] <- "Yes"
+#subset.conga <- subset(conga, CTaa %in% conga.nn.idx$CTaa)
+#subset.conga <- FindNeighbors(subset.conga, 
+                              #reduction = "KF.only", 
+                              #k.param = 11, 
+                             # return.neighbor = TRUE)
+#Trex.nn.idx <- as.data.frame(subset.conga@neighbors$RNA.nn@nn.idx[,2:11])
+
+conga <- FindNeighbors(conga, 
+                      reduction = "KF.only", 
+                       k.param = 11, 
+                       return.neighbor = TRUE)
+Trex.nn.idx <- as.data.frame(conga@neighbors$RNA.nn@nn.idx[,2:11])
+
+#Trex.nn.idx$CTaa <- subset.conga$CTaa
+Trex.nn.idx$CTaa <- conga$CTaa
 
 clones <- unique(Trex.nn.idx$CTaa)
 output.JI <- NULL
@@ -178,10 +186,11 @@ for (i in seq_along(clones)) {
   Trex.tmp <- as.numeric(Trex.nn.idx[Trex.nn.idx$CTaa == clones[i],1:10])
   Trex.nn <- Trex.nn.idx$CTaa[Trex.tmp]
   
-  cg.tmp <- as.numeric(conga.nn.idx[conga.nn.idx$CTaa == clones[i],1:10])
+  cg.tmp <- as.numeric(unique(unlist(conga.nn.idx[conga.nn.idx$CTaa == clones[i],1:10])))
   conga.nn <- conga.nn.idx$CTaa[cg.tmp]
   numerator <- length(intersect(Trex.nn, conga.nn))
   denominator <- length(unique(c(conga.nn, Trex.nn)))
+  #Filtering leads to a reduction in conga, that needs to be calculated
   if (numerator > 0) {
     sub <- length(which(conga.nn.idx$CTaa[cg.tmp] %!in% Trex.nn.idx$CTaa))
     if(sub > 0) {
@@ -235,8 +244,6 @@ for (i in seq_len(5)) {
   x.pos <- intersect(grep(confirming.seq[[1]][i], tcrdist$CTaa), grep(confirming.seq[[2]][i], tcrdist$CTaa))
   tcrdist$confirmation.seq[x.pos] <- paste0("TCR.", i)
 }
-
-#TCR1 = c(9,2), TCR2 = c(5,1), TCR3 = c(6,2), TCR4 = c(8,1), TCR5 = c(8,1)
 
 
 epitope <- ggplot(tcrdist, aes(x= X1, y = X2)) + 
@@ -323,7 +330,6 @@ conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) +
                 coord_flip() + 
                 theme(axis.title.y = element_blank())
 
-gex.clusters + conga.cluster +  epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
 
 epitope + (epitope.JI + epitope.DI) / (trex.break + conga.break)
 
@@ -390,10 +396,22 @@ for(i in seq_along(TRA.clust.list)) {
   TRA.adj.matrix[[i]] <- as(as(as(TRA.clust.list[[i]]$adj_mtx, "dMatrix"), "generalMatrix"), "RsparseMatrix")
 }
 TRA.sparse <- merge.sparse(TRA.adj.matrix)
-x <- igraph::graph_from_adjacency_matrix(TRA.sparse)
-plot.layout <- layout_with_mds(x)
-plot(x, vertex.label = NA, edge.wdith = 1, layout = plot.layout)
+x <- igraph::graph_from_adjacency_matrix(TRA.sparse, mode = "undirected")
+x <- igraph::simplify(x)
 
+V(x)
+plot.layout <- layout_with_mds(x)
+plot(x,
+     vertex.label = NA, 
+     layout = plot.layout,
+     size = 8, 
+     frame.color = NA)
+
+y <- cluster_fast_greedy(x)
+
+plot(y,x, vertex.label = NA,)
+
+#Handle the duplicates sequences across several
 #Need to figure out neighborhood ID
 #Need to Figure out visualizations - add patient info, clone size
 ```
