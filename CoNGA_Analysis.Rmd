@@ -323,11 +323,11 @@ conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) +
                 coord_flip() + 
                 theme(axis.title.y = element_blank())
 
-gex.clusters + conga.cluster +  epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
+#gex.clusters + conga.cluster +  epitope +  Trex.cluster + trex.break +  plot_layout(ncol = 3)
 
 epitope + (epitope.JI + epitope.DI) / (trex.break + conga.break)
 
-ggsave("conga.epitope1.png", height = 6, width = 14)
+#ggsave("conga.epitope1.png", height = 6, width = 14)
 
 ggplot(tcrdist, aes(x= X1, y = X2)) + 
                     stat_density_2d(
@@ -362,9 +362,11 @@ TRA <- unique(data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRU
                   VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,1], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,2])))
 TRA.split <- split(TRA, TRA$VJgene)
 
+
 TRB <- unique(data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,2], 
                   VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,3], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,5])))
 TRB$VJgene <- str_remove_all(TRB$VJgene, "TRAC_")
+TRB$VJgene <- str_remove_all(TRB$VJgene, "_")
 TRB.split <- split(TRB, TRB$VJgene)
 
 
@@ -385,15 +387,30 @@ for(i in seq_along(TRB.split)) {
                                          method = "lv", 
                                          max_dist = 2)
 }
+
 TRA.adj.matrix <- list()
 for(i in seq_along(TRA.clust.list)) {
   TRA.adj.matrix[[i]] <- as(as(as(TRA.clust.list[[i]]$adj_mtx, "dMatrix"), "generalMatrix"), "RsparseMatrix")
 }
 TRA.sparse <- merge.sparse(TRA.adj.matrix)
 x <- igraph::graph_from_adjacency_matrix(TRA.sparse)
-plot.layout <- layout_with_mds(x)
-plot(x, vertex.label = NA, edge.wdith = 1, layout = plot.layout)
-
+x <- simplify(x)
+components <- components(x, mode = c("weak"))
+out <- data.frame("cluster" = components$membership, 
+                  "filtered" = names(components$membership))
+write.csv(out, "./output/TRA.edit.distance.cluster.csv")
+      
+TRB.adj.matrix <- list()
+for(i in seq_along(TRB.clust.list)) {
+  TRB.adj.matrix[[i]] <- as(as(as(TRB.clust.list[[i]]$adj_mtx, "dMatrix"), "generalMatrix"), "RsparseMatrix")
+}
+TRB.sparse <- merge.sparse(TRB.adj.matrix)
+x <- igraph::graph_from_adjacency_matrix(TRB.sparse)
+x <- simplify(x)
+components <- components(x, mode = c("weak"))
+out <- data.frame("cluster" = components$membership, 
+                  "filtered" = names(components$membership))
+write.csv(out, "./output/TRB.edit.distance.cluster.csv")
 #Need to figure out neighborhood ID
 #Need to Figure out visualizations - add patient info, clone size
 ```
