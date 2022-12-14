@@ -328,28 +328,6 @@ conga.break <- ggplot(df2, aes(x= Var1, y = Freq)) +
 epitope + (epitope.JI + epitope.DI) / (trex.break + conga.break)
 
 #ggsave("conga.epitope1.png", height = 6, width = 14)
-
-ggplot(tcrdist, aes(x= X1, y = X2)) + 
-                    stat_density_2d(
-                      geom = "polygon", 
-                      bins = 25,
-                      aes(fill = stat(level))) +
-                    facet_wrap(~clusters_tcr) +
-                    xlab("gexUMAP_1") + 
-                    ylab("gexUMAP_2") + 
-  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
-                    theme_classic()
-                    
-                    ggplot(tcrdist, aes(x= X1, y = X2)) + 
-                    stat_density_2d(
-                      geom = "polygon", 
-                      bins = 25,
-                      aes(fill = stat(level))) +
-                    facet_wrap(~KF_snn_res.0.3) +
-                    xlab("gexUMAP_1") + 
-                    ylab("gexUMAP_2") + 
-  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
-                    theme_classic()
 ```
 
 # Neighborhood calculation
@@ -358,6 +336,10 @@ ggplot(tcrdist, aes(x= X1, y = X2)) +
 library(stringr)
 library(clustringr)
 source("./R/sparse.merge.R")
+
+########################################################
+#Collecting TR sequences and organizing by VJ gene usage
+#########################################################
 TRA <- unique(data.frame(CT = stringr::str_split(conga$CTaa, "_", simplify = TRUE)[,1], 
                   VJgene = paste0( stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,1], ".", stringr::str_split(conga$CTgene, "[.]", simplify = TRUE)[,2])))
 TRA.split <- split(TRA, TRA$VJgene)
@@ -370,8 +352,11 @@ TRB$VJgene <- str_remove_all(TRB$VJgene, "_")
 TRB.split <- split(TRB, TRB$VJgene)
 
 
+###############################################
+#Calculating edit distance across each VJ group
+###############################################
+#Retaining only info for chains that are <= 2 ditance apart
 TRA.clust.list <- list()
-
 for(i in seq_along(TRB.split)) {
   TRA.clust.list[[i]] <- cluster_strings(unique(TRA.split[[i]][,1]),
                                          clean = TRUE,
@@ -387,6 +372,10 @@ for(i in seq_along(TRB.split)) {
                                          method = "lv", 
                                          max_dist = 2)
 }
+
+#############################################
+#Merging all the groups and id the components
+#############################################
 
 TRA.adj.matrix <- list()
 for(i in seq_along(TRA.clust.list)) {
@@ -411,7 +400,47 @@ components <- components(x, mode = c("weak"))
 out <- data.frame("cluster" = components$membership, 
                   "filtered" = names(components$membership))
 write.csv(out, "./output/TRB.edit.distance.cluster.csv")
-#Need to figure out neighborhood ID
+
+####################################################
+#Nearest Neighbors from the Trex-based vectorization
+####################################################
+conga <- FindNeighbors(conga, 
+                       reduction = "KF.only", 
+                       return.neighbor = TRUE)
+
+Trex.based.nn <- conga@graphs$KF_nn
+
+a <- igraph::graph_from_adjacency_matrix(Trex.based.nn)
+plot.layout <- layout_with_mds(a)
+plot(a, vertex.label = NA, layout = plot.layout)
+
+b <- as_edgelist(a)
+
+TRA.edit.neighbors <- read.csv("./output/TRA.edit.distance.cluster.csv")
+TRB.edit.neighbors <- read.csv("./output/TRB.edit.distance.cluster.csv")
+
+b.TRB <- b %>%
+  as.data.frame()
+
+b.TRB$V1 <- stringr::str_split(b.TRB$V1, "_", simplify = TRUE)[,2]
+b.TRB$V2 <- stringr::str_split(b.TRB$V2, "_", simplify = TRUE)[,2]
+
+unique.TRB <- unique(TRB.edit.neighbors$filtered)
+
+edges.list.rows.to.remove <- NULL
+for(i in seq_along(unique.TRB)) {
+  trex.edge <- b.TRB[b.TRB[,1] == toupper(unique.TRB[i]),]
+  
+  edit.neighbors <- TRB.edit.neighbors[TRB.edit.neighbors$cluster == TRB.edit.neighbors[TRB.edit.neighbors$filtered == unique.TRB[i],]$cluster,]
+  
+  edges.list.rows.to.remove <- c(edges.list.rows.to.remove, as.numeric(rownames(trex.edge[trex.edge$V2 %!in% toupper(edit.neighbors$filtered),])))
+}
+edges.list.rows.to.remove <- unique(edges.list.rows.to.remove)
+
+c <- delete.edges(a, edges.list.rows.to.remove)
+
+plot(a, vertex.label = NA, edge.wdith = 1)
+plot(c, vertex.label = NA, edge.wdith = 1)
 #Need to Figure out visualizations - add patient info, clone size
 ```
 
