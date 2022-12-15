@@ -72,6 +72,15 @@ python /Users/Nick/conga/scripts/run_conga.py \
 
 
 ```{r}
+library(ggplot2)
+library(mumosa)
+library(ggthemes)
+library(clustringr)
+library(stringr)
+library(dplyr)
+library(RColorBrewer)
+library(patchwork)
+library(Seurat)
 ad <- anndata::read_h5ad("./data/preCoNGA/CoNGA.output_final.h5ad")
 
 meta.data <- data.frame(ad$obs)
@@ -439,8 +448,14 @@ edges.list.rows.to.remove <- unique(edges.list.rows.to.remove)
 
 c <- delete.edges(a, edges.list.rows.to.remove)
 
-plot(a, vertex.label = NA, edge.wdith = 1)
-plot(c, vertex.label = NA, edge.wdith = 1)
+plot.layout <- layout_with_kk(a)
+plot(a, vertex.label = NA, layout = plot.layout)
+plot(c, vertex.label = NA, layout = plot.layout)
+
+c.edge <-as_edgelist(c)
+graph <- as_tbl_graph(c.edge, directed = TRUE)
+
+
 #Need to Figure out visualizations - add patient info, clone size
 ```
 
