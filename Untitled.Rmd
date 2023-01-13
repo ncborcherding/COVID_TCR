@@ -1,0 +1,60 @@
+---
+title: "Untitled"
+author: "Nicholas Borcherding"
+date: '2023-01-13'
+output: html_document
+---
+
+Trying to identify edit distances for candidate TCRs
+```{r cars}
+conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
+meta <- conga[[]]
+meta <- meta[!is.na(meta$confirmation.seq),]
+confirm.TCRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
+confirm.TCRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
+edit.distance <- 2
+
+TCRA <- stringr::str_split(conga[[]]$CTaa, "_", simplify = TRUE)[,1]
+TCRB <- stringr::str_split(conga[[]]$CTaa, "_", simplify = TRUE)[,2]
+    
+additions.TCRA <- lapply(confirm.TCRA, function(x) {
+      pos <- which(stringdist(x, TCRA, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRA, method = "lv") > 0)
+      pos
+})
+
+additions.TCRB <- lapply(confirm.TCRB, function(x) {
+      pos <- which(stringdist(x, TCRB, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRB, method = "lv") > 0)
+      pos
+    })
+
+conga@meta.data$confirmation.neighbors.TCRA <- NA
+conga@meta.data$confirmation.neighbors.TCRB <- NA
+
+for(i in seq_along(additions.TCRA)) {
+  conga@meta.data$confirmation.neighbors.TCRA[additions.TCRA[[i]]] <- paste0("TCR.", i)
+}
+
+for(i in seq_along(additions.TCRB)) {
+  conga@meta.data$confirmation.neighbors.TCRB[additions.TCRB[[i]]] <- paste0("TCR.", i)
+}
+
+df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
+                  conga[[]])
+
+df.sub <- subset(df, !is.na(confirmation.seq))
+df.sub2 <- subset(df, !is.na(confirmation.neighbors.TCRB))
+
+ggplot() +
+    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n), 
+               fill = "grey", shape =21, stroke = 0.1) + 
+  geom_point(data =df.sub2, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = confirmation.neighbors.TCRB), shape =21, stroke = 0.1) + 
+    geom_point(data = df.sub, aes(x=phateTrex_1, y = phateTrex_2, fill = confirmation.seq), 
+               size = 4, shape =21, stroke = 0.2) + 
+    scale_fill_manual(values = brewer.pal(5, "RdYlBu")) +
+    theme_void() + 
+    guides(fill = "none", size = "none")
+
+
+```
