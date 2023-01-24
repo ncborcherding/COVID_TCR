@@ -7,9 +7,15 @@ output: html_document
 
 Trying to identify edit distances for candidate TCRs
 ```{r cars}
+library(Seurat)
+library(stringdist)
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 meta <- conga[[]]
 meta <- meta[!is.na(meta$confirmation.seq),]
+meta <- meta[order(meta$confirmation.seq),]
+
+confirm.TCRA.gene <- as.vector(meta$TRAV)
+confirm.TCRB.gene <- as.vector(meta$TRBV)
 confirm.TCRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
 confirm.TCRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
 edit.distance <- 2
@@ -33,28 +39,39 @@ conga@meta.data$confirmation.neighbors.TCRA <- NA
 conga@meta.data$confirmation.neighbors.TCRB <- NA
 
 for(i in seq_along(additions.TCRA)) {
-  conga@meta.data$confirmation.neighbors.TCRA[additions.TCRA[[i]]] <- paste0("TCR.", i)
+  idx.A <- as.vector(conga@meta.data$TRAV[additions.TCRA[[i]]])
+  idx.A <- which(idx.A == confirm.TCRA.gene[i])
+  
+  conga@meta.data$confirmation.neighbors.TCRA[additions.TCRA[[i]][idx.A]] <- paste0("TCR.", i)
 }
 
 for(i in seq_along(additions.TCRB)) {
-  conga@meta.data$confirmation.neighbors.TCRB[additions.TCRB[[i]]] <- paste0("TCR.", i)
+   idx.B <- as.vector(conga@meta.data$TRBV[additions.TCRB[[i]]])
+  idx.B <- which(idx.B == confirm.TCRB.gene[i])
+  conga@meta.data$confirmation.neighbors.TCRB[additions.TCRB[[i]][idx.B]] <- paste0("TCR.", i)
 }
+
+meta <- conga[[]]
+conga@meta.data$TCR.both <- paste0(conga@meta.data$confirmation.neighbors.TCRA, conga@meta.data$confirmation.neighbors.TCRB)
 
 df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
                   conga[[]])
+df$TCR.both[df$TCR.both == "NANA"] <- NA
+df$TCR.both <- stringr::str_remove_all(df$TCR.both, "NA")
+df$TCR.both[df$TCR.both == "TCR.1TCR.1"] <- "TCR.1"
+df$TCR.both[df$TCR.both == "TCR.2TCR.2"] <- "TCR.2"
 
 df.sub <- subset(df, !is.na(confirmation.seq))
-df.sub2 <- subset(df, !is.na(confirmation.neighbors.TCRB))
+df.sub2 <- subset(df, !is.na(TCR.both))
+write.csv(df.sub2, "Trex_edit.distance2_matchedVgenes.csv")
 
 ggplot() +
     geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n), 
                fill = "grey", shape =21, stroke = 0.1) + 
-  geom_point(data =df.sub2, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = confirmation.neighbors.TCRB), shape =21, stroke = 0.1) + 
+  geom_point(data =df.sub2, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = TCR.both), shape =21, stroke = 0.1) + 
     geom_point(data = df.sub, aes(x=phateTrex_1, y = phateTrex_2, fill = confirmation.seq), 
                size = 4, shape =21, stroke = 0.2) + 
     scale_fill_manual(values = brewer.pal(5, "RdYlBu")) +
-    theme_void() + 
-    guides(fill = "none", size = "none")
-
-
+    theme_void()
+ggsave("added_edit.distance.png", height = 4, width = 5)
 ```
