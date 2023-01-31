@@ -10,6 +10,9 @@ Trying to identify edit distances for candidate TCRs
 library(Seurat)
 library(stringdist)
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
+conga <- annotateDB(conga, chains = "TRB", edit.distance = 0)
+conga <- annotateDB(conga, chains = "TRA", edit.distance = 0)
+
 meta <- conga[[]]
 meta <- meta[!is.na(meta$confirmation.seq),]
 meta <- meta[order(meta$confirmation.seq),]
@@ -75,3 +78,63 @@ ggplot() +
     theme_void()
 ggsave("added_edit.distance.png", height = 4, width = 5)
 ```
+
+
+
+Figure 4C 
+```{r}
+dir.create("./output/Figure4")
+conga$TCRA.COVID <- "No"
+conga$TCRA.COVID[grepl("SARS-CoV-2", conga$TRA_Epitope.species)] <- "Yes"
+conga$TCRA.COVID[!is.na(conga$TCRA.epitope)] <- "Yes"
+TCRA.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRA.COVID)
+TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
+
+conga$TCRB.COVID <- "No"
+conga$TCRB.COVID[grepl("SARS-CoV-2", conga$TRB_Epitope.species)] <- "Yes"
+conga$TCRB.COVID[!is.na(conga$TCRB.epitope)] <- "Yes"
+TCRB.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRB.COVID)
+TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
+
+SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+
+updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
+clone.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(249)
+names(clone.palette) <- updated.shared.clones
+
+return.cc <- compareClonotypes(SeuratObj, 
+                  clonotypes = updated.shared.clones, 
+                  split.by = "timepoint",
+                  cloneCall="aa", 
+                  graph = "alluvial",
+                  exportTable = TRUE)
+uni.clones <- unique(return.cc$Clonotypes[return.cc$Sample == "d28"])
+"%!in%" <- Negate("%in%")
+all.times <- c("d28", "d60", "d110", "d201")
+output <- NULL
+for(i in seq_along(uni.clones)) {
+  x <- return.cc[return.cc$Clonotypes == uni.clones[i],]
+  placement <- names(which(table(x$Sample) == 1))
+  new.times <- all.times[all.times %!in% placement]
+  rep.value <- length(new.times)
+  y <- data.frame(Clonotypes = rep(uni.clones[i], rep.value), Proportion = rep(0, rep.value), Sample = new.times)
+  output <- rbind(output, y)
+  
+}
+  return.cc <- rbind(return.cc, output)
+  return.cc$Sample <- factor(return.cc$Sample, levels = c("d28", "d60", "d110", "d201"))
+  ggplot(return.cc, aes(x = Sample, 
+                        fill = Clonotypes, 
+                        group = Clonotypes,
+                    stratum = Clonotypes, 
+                    alluvium = Clonotypes, 
+                    y = Proportion, label = Clonotypes)) +
+                theme_classic() +
+                theme(axis.title.x = element_blank()) + 
+                geom_stratum() +
+                geom_flow(stat = "alluvium") + 
+                guides(fill = "none")  + 
+                scale_fill_manual(values = clone.palette)
+  ggsave("./output/Figure4/Figure4C.pdf", height = 4, width = 6)
+```
+
