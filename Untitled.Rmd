@@ -79,6 +79,110 @@ ggplot() +
 ggsave("added_edit.distance.png", height = 4, width = 5)
 ```
 
+# Figure 4
+```{r}
+conga$TCRA.COVID <- "No"
+conga$TCRA.COVID[grepl("SARS-CoV-2", conga$TRA_Epitope.species)] <- "Yes"
+conga$TCRA.COVID[!is.na(conga$TCRA.epitope)] <- "Yes"
+TCRA.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRA.COVID)
+TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
+
+conga$TCRB.COVID <- "No"
+conga$TCRB.COVID[grepl("SARS-CoV-2", conga$TRB_Epitope.species)] <- "Yes"
+conga$TCRB.COVID[!is.na(conga$TCRB.epitope)] <- "Yes"
+TCRB.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRB.COVID)
+TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
+
+SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+
+updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
+dir.create("./output/Figure4")
+```
+
+Figure 4A
+
+```{r}
+subset.obj <- subset(SeuratObj, CTaa %in% updated.shared.clones)
+subset.obj$timeline <- "Late"
+subset.obj$timeline[subset.obj$timepoint %in% c("d28", "d60")] <- "Early"
+
+Idents(subset.obj) <- "timeline"
+EvL.markers <- FindMarkers(subset.obj, 
+                           ident.1 = "Early",
+                           test.use = "MAST", 
+                           latent.vars = "donor", 
+                           logfc.threshold = 0,
+                           min.pct = 0,
+                           pseudocount.use = 0.1)
+
+write.csv(EvL.markers, "./output/Tfh.DEG.EarlyvsLate.csv")
+EvL.markers <- EvL.markers %>%
+                mutate(Percent.Delta = pct.1 - pct.2)
+EvL.markers$genes <- rownames(EvL.markers)
+rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
+
+top10 <- EvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_max(order_by = avg_log2FC, n = 10)
+
+bottom10 <- EvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_min(order_by = avg_log2FC, n = 10)
+
+EvL.plot <- ggplot(EvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+  geom_point(aes(size = Percent.Delta), color = "grey") + 
+  geom_point(data=subset(EvL.markers, genes %in% top10$genes),
+             aes(size = Percent.Delta), color = rb.palette[1]) + 
+  geom_point(data=subset(EvL.markers, genes %in% bottom10$genes),
+             aes(size = Percent.Delta), color = rb.palette[11]) + 
+  geom_text_repel(data=subset(EvL.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  theme_classic() + 
+  scale_size(range = c(0.1,3)) + 
+  geom_hline(yintercept = 1.3) + 
+  geom_vline(xintercept = 0)
+
+
+
+Idents(subset.obj) <- "timepoint"
+FvL.markers <- FindMarkers(subset.obj, 
+                           ident.1 = "d28",
+                           ident.2 = "d201",
+                           test.use = "MAST", 
+                           latent.vars = "donor", 
+                           logfc.threshold = 0,
+                           min.pct = 0,
+                           pseudocount.use = 0.1)
+
+write.csv(FvL.markers, "./output/Tfh.DEG.d28vsd201.csv")
+
+FvL.markers <- FvL.markers %>%
+                mutate(Percent.Delta = pct.1 - pct.2)
+FvL.markers$genes <- rownames(FvL.markers)
+
+top10 <- FvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_max(order_by = avg_log2FC, n = 10)
+
+bottom10 <- FvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_min(order_by = avg_log2FC, n = 10)
+
+FvL.plot <- ggplot(FvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+  geom_point(aes(size = Percent.Delta), color = "grey") + 
+  geom_point(data=subset(FvL.markers, genes %in% top10$genes),
+             aes(size = Percent.Delta), color = rb.palette[1]) + 
+  geom_point(data=subset(FvL.markers, genes %in% bottom10$genes),
+             aes(size = Percent.Delta), color = rb.palette[11]) + 
+  geom_text_repel(data=subset(FvL.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  theme_classic() + 
+  scale_size(range = c(0.1,3)) + 
+  geom_hline(yintercept = 1.3) + 
+  geom_vline(xintercept = 0)
+
+EvL.plot + FvL.plot
+ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 10, dpi = 600)
+
+```
 
 
 Figure 4C 
