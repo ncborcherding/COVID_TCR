@@ -184,6 +184,68 @@ ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 10, dpi = 600)
 
 ```
 
+```{r}
+meta <- subset.obj[[]]
+
+ES2 <- ES[rownames(ES) %in% rownames(meta),]
+colnames(ES2) <- stringr::str_remove_all(colnames(ES2), "_UCell")
+variances <- apply(ES2, 2, var)
+#ES2 <- ES2[,-which(variances == 0)]
+
+pathways <- colnames(ES2)
+
+ES2 <- merge(ES2, meta, by = 0)
+
+sig.results <- getSignificance(ES2, 
+                               group = "timepoint", 
+                               gene.sets = pathways, 
+                               fit = "KW")
+rownames(sig.results) <- stringr::str_remove_all(rownames(sig.results), "_UCell")
+
+sig.results2 <- getSignificance(ES2, 
+                               group = "timepoint", 
+                               gene.sets = pathways, 
+                               fit = "ANOVA")
+rownames(sig.results2) <- stringr::str_remove_all(rownames(sig.results2), "_UCell")
+
+KW.sig.pathways <- sig.results %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = Chi.square, n = 200) %>%
+                        rownames() 
+
+ANOVA.sig.pathways <- sig.results2 %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = f.value, n = 200) %>%
+                        rownames()
+
+pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
+old.pathways <- read.csv("./output/int.pathways.csv")
+
+pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
+pathways.intersect <- pathways.intersect[-c(8,10,11,15,16)]
+write(pathways.intersect, "output/Agspecific.intersected.pathways.txt")
+
+summary <- ES2 %>%
+  group_by(timepoint) %>%
+  summarise(across(pathways.intersect, median))
+
+normalize <- function(x) {
+      (x- min(x)) /(max(x)-min(x))
+}
+
+for(i in 2:49) {
+  summary[,i] <- normalize(summary[,i])
+}
+summary <- as.data.frame(summary)
+
+rownames(summary) <- summary$timepoint
+
+
+
+pdf("./output/Figure4/Figure4b.pdf", height = 8, width = 10)
+pheatmap::pheatmap(t(summary[,2:49]))
+dev.off()
+```
 
 Figure 4C 
 ```{r}

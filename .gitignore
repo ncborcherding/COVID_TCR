@@ -8,3 +8,5 @@ data/preCoNGA/merged_COVID_gex.h5ad
 data/preCoNGA/merged_COVID_clones_AB.dist_50_kpcs_tcrdists.txt
 output/.DS_Store
 .DS_Store
+*.png
+*.pdf

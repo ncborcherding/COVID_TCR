@@ -687,7 +687,7 @@ pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
 #pathways.intersect <- pathways.intersect[-51]
 pathways.intersect <- pathways.intersect[-c(3,4,8,41,47,57,62,73,78,80,85,86,90,99,101,120,125,139,141)]
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
-
+write(pathways.intersect, "output/intersected.pathways.txt")
 
 summary <- ES2 %>%
   group_by(seurat_clusters) %>%
