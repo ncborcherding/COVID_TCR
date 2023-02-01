@@ -185,6 +185,7 @@ ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 10, dpi = 600)
 ```
 
 ```{r}
+ES <- readRDS("./data/processedData/enrichmentResults.rds")
 meta <- subset.obj[[]]
 
 ES2 <- ES[rownames(ES) %in% rownames(meta),]
@@ -430,3 +431,64 @@ LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val))) +
 ggsave("./output/Figure6/Figure6A.png", height = 4.5, width = 5, dpi = 600)
 ```
 
+```{r}
+meta <- subset.Obj[[]]
+
+ES2 <- ES[rownames(ES) %in% rownames(meta),]
+colnames(ES2) <- stringr::str_remove_all(colnames(ES2), "_UCell")
+variances <- apply(ES2, 2, var)
+#ES2 <- ES2[,-which(variances == 0)]
+
+pathways <- colnames(ES2)
+
+ES2 <- merge(ES2, meta, by = 0)
+
+sig.results <- getSignificance(ES2, 
+                               group = "tissue", 
+                               gene.sets = pathways, 
+                               fit = "Wilcoxon")
+
+sig.results2 <- getSignificance(ES2, 
+                               group = "tissue", 
+                               gene.sets = pathways, 
+                               fit = "T.test")
+
+W.sig.pathways <- sig.results %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = W.statistic, n = 200) %>%
+                        rownames() 
+
+T.sig.pathways <- sig.results2 %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = T.statistic, n = 200) %>%
+                        rownames()
+
+pathways.intersect <- intersect(W.sig.pathways, T.sig.pathways)
+old.pathways <- read.csv("./output/int.pathways.csv")
+
+pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
+pathways.intersect <- pathways.intersect[-c(8,10,11,15,16)]
+write(pathways.intersect, "./output/Figure6_Agspecific.intersected.pathways.txt")
+
+ES2$timetissue <- paste0(ES2$timepoint, "_", ES2$tissue)
+summary <- ES2 %>%
+  group_by(timetissue) %>%
+  summarise(across(pathways.intersect, median))
+
+normalize <- function(x) {
+      (x- min(x)) /(max(x)-min(x))
+}
+
+for(i in 2:56) {
+  summary[,i] <- normalize(summary[,i])
+}
+summary <- as.data.frame(summary)
+
+rownames(summary) <- summary$timetissue
+
+
+
+pdf("./output/Figure6/Figure6b.pdf", height = 8, width = 14)
+pheatmap::pheatmap(t(summary[,2:56]))
+dev.off()
+```
