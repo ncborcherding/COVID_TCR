@@ -304,3 +304,129 @@ for(i in seq_along(uni.clones)) {
   ggsave("./output/Figure4/Figure4C.pdf", height = 4, width = 6)
 ```
 
+# Figure 6
+
+```{r}
+seuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
+seuratObj <- annotateDB(seuratObj, chains = "TRB", edit.distance = 0)
+seuratObj <- annotateDB(seuratObj, chains = "TRA", edit.distance = 0)
+
+#Spike 167-180 epitope
+sequence <- read.csv("./sequenceInfo/Sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(seuratObj$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+seuratObj$TCRB.S167.180<- NA
+seuratObj$TCRB.S167.180[TB] <- "Specific"
+
+seuratObj$TCRA.S167.180 <- NA
+seuratObj$TCRA.S167.180[TA] <- "Specific"
+
+
+#Spike 815-830 epitope
+
+sequence <- read.csv("./sequenceInfo/dykema.sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(seuratObj$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+seuratObj$TCRB.S815.830 <- NA
+seuratObj$TCRB.S815.830[TB] <- "Specific"
+
+seuratObj$TCRA.S815.830 <- NA
+seuratObj$TCRA.S815.830[TA] <- "Specific"
+
+# VDJdb sequence
+
+sequences <- read.delim("./sequenceInfo/VDJdb.tsv")
+sequences <- sequences[sequences$MHC.class == "MHCII" & sequences$Epitope.gene == "Spike",]
+
+epitope <- c("NCTFEYVSQPFLMDL" = "S164.179",
+"RISNCVADYSVLYNS" = "S356.371",
+"NFSQILPDPSKPSKR" = "S800.815",
+"HWFVTQRNFYEPQII" = "S1101.1115",
+"VGGNYNYLYRLFRKS" = "S445.459",
+"NNSYECDIPIGAGIC" = "S657.671")
+
+seuratObj$TCRB.VDJ.db <- NA
+seuratObj$TCRA.VDJ.db <- NA
+for (i in seq_along(epitope)) {
+  sequences$Epitope[which(sequences$Epitope == names(epitope)[i])] <- epitope[i]
+  TA <- sequences[sequences$Gene == "TRA" & sequences$Epitope == epitope[i], ]
+  TB <- sequences[sequences$Gene == "TRB" & sequences$Epitope == epitope[i], ]
+  TA.loc <-which(CTaa$V1 %in% TA$CDR3)
+  TB.loc <-which(CTaa$V2 %in% TB$CDR3)
+  seuratObj$TCRB.VDJ.db[TB.loc] <- epitope[i]
+  seuratObj$TCRA.VDJ.db[TA.loc] <- epitope[i]
+}
+
+
+seuratObj$TCRB.epitope  <- NA
+seuratObj$TCRB.epitope <- ifelse(!is.na(seuratObj$TCRB.S167.180), "S167.180", NA)
+seuratObj$TCRB.epitope <- ifelse(!is.na(seuratObj$TCRB.S815.830), "S815.830", seuratObj$TCRB.epitope)
+seuratObj$TCRB.epitope <- ifelse(!is.na(seuratObj$TCRB.VDJ.db) & is.na(seuratObj$TCRB.epitope), seuratObj$TCRB.VDJ.db, seuratObj$TCRB.epitope)
+
+seuratObj$TCRA.epitope  <- NA
+seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.S167.180), "S167.180", NA)
+seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.S815.830), "S815.830", seuratObj$TCRA.epitope)
+seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.VDJ.db) & is.na(seuratObj$TCRA.epitope), seuratObj$TCRA.VDJ.db, seuratObj$TCRA.epitope)
+
+
+seuratObj$TCRA.COVID <- "No"
+seuratObj$TCRA.COVID[grepl("SARS-CoV-2", seuratObj$TRA_Epitope.species)] <- "Yes"
+seuratObj$TCRA.COVID[!is.na(seuratObj$TCRA.epitope)] <- "Yes"
+TCRA.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRA.COVID)
+TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
+
+seuratObj$TCRB.COVID <- "No"
+seuratObj$TCRB.COVID[grepl("SARS-CoV-2", seuratObj$TRB_Epitope.species)] <- "Yes"
+seuratObj$TCRB.COVID[!is.na(seuratObj$TCRB.epitope)] <- "Yes"
+TCRB.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRB.COVID)
+TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
+
+subset.Obj <- subset(seuratObj, CTaa %in% unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)))
+subset.Obj <- subset(subset.Obj, CD8.pos == "No")
+dir.create("./output/Figure6")
+```
+
+# Figure 6A
+
+```{r}
+Idents(subset.Obj) <- "tissue"
+LNvB.markers <- FindMarkers(subset.Obj, 
+                           ident.1 = "LN",
+                           test.use = "MAST", 
+                           latent.vars = c("donor"), 
+                           logfc.threshold = 0,
+                           min.pct = 0,
+                           pseudocount.use = 0.1)
+
+write.csv(LNvB.markers, "./output/Ag.specific.LNvsBLcsv")
+LNvB.markers <- LNvB.markers %>%
+                mutate(Percent.Delta = pct.1 - pct.2)
+LNvB.markers$genes <- rownames(LNvB.markers)
+rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
+
+top10 <- LNvB.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_max(order_by = avg_log2FC, n = 10)
+
+bottom10 <- LNvB.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_min(order_by = avg_log2FC, n = 10)
+
+LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+  geom_point(aes(size = Percent.Delta), color = "grey") + 
+  geom_point(data=subset(LNvB.markers, genes %in% top10$genes),
+             aes(size = Percent.Delta), color = rb.palette[1]) + 
+  geom_point(data=subset(LNvB.markers, genes %in% bottom10$genes),
+             aes(size = Percent.Delta), color = rb.palette[11]) + 
+  geom_text_repel(data=subset(LNvB.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  theme_classic() + 
+  scale_size(range = c(0.1,3)) + 
+  geom_hline(yintercept = 1.3) + 
+  geom_vline(xintercept = 0)
+ggsave("./output/Figure6/Figure6A.png", height = 4.5, width = 5, dpi = 600)
+```
+
