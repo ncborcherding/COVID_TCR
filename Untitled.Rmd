@@ -84,15 +84,16 @@ saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 
 # Figure 4
 ```{r}
+conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 conga$TCRA.COVID <- "No"
-conga$TCRA.COVID[grepl("SARS-CoV-2", conga$TRA_Epitope.species)] <- "Yes"
+conga$TCRA.COVID[grepl("Spike", conga$TRA_Epitope.target)] <- "Yes"
 conga$TCRA.COVID[!is.na(conga$TCRA.epitope)] <- "Yes"
 conga$TCRA.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRA)] <- "Yes"
 TCRA.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRA.COVID)
 TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
 
 conga$TCRB.COVID <- "No"
-conga$TCRB.COVID[grepl("SARS-CoV-2", conga$TRB_Epitope.species)] <- "Yes"
+conga$TCRB.COVID[grepl("Spike", conga$TRB_Epitope.target)] <- "Yes"
 conga$TCRB.COVID[!is.na(conga$TCRB.epitope)] <- "Yes"
 conga$TCRB.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRB)] <- "Yes"
 TCRB.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRB.COVID)
@@ -237,12 +238,12 @@ write(pathways.intersect, "output/Agspecific.intersected.pathways.txt")
 summary <- ES2 %>%
   group_by(timepoint) %>%
   summarise(across(pathways.intersect, median))
-summary <- summary[,-c(which(colSums(summary[2:25]) == 0)+1)]
+
 normalize <- function(x) {
       (x- min(x)) /(max(x)-min(x))
 }
 
-for(i in 2:23) {
+for(i in 2:75) {
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
@@ -252,7 +253,7 @@ rownames(summary) <- summary$timepoint
 
 
 pdf("./output/Figure4/Figure4b.pdf", height = 8, width = 10)
-pheatmap::pheatmap(t(summary[,2:23]))
+pheatmap::pheatmap(t(summary[,2:75]))
 dev.off()
 ```
 
@@ -267,6 +268,7 @@ df <- unique(SeuratObj[[]][SeuratObj$CTaa %in% updated.shared.clones, c("CTaa", 
 duplicated <- unique(df$CTaa[which(duplicated(df$CTaa))])
 not.duplicated <- unique(df$CTaa[which(!duplicated(df$CTaa))])
 not.duplicated <- not.duplicated[not.duplicated %!in% duplicated]
+
 
 clone.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(length(duplicated))
 
@@ -295,10 +297,8 @@ for(i in seq_along(duplicated)) {
 }
   return.cc <- unique(rbind(return.cc, output))
   return.cc$Sample <- factor(return.cc$Sample, levels = c("d28", "d60", "d110", "d201"))
-  return.cc$Clonotypes <- as.vector(return.cc$Clonotypes)
   
-  
-  #return.cc$Clonotypes <- factor(return.cc$Clonotypes, levels = names(clone.palette))
+  return.cc$Clonotypes <- factor(return.cc$Clonotypes, levels = names(clone.palette))
   ggplot(return.cc, aes(x = Sample, 
                         fill = Clonotypes, 
                         group = Clonotypes,
@@ -309,7 +309,7 @@ for(i in seq_along(duplicated)) {
                 theme_classic() +
                 theme(axis.title.x = element_blank()) + 
                 geom_stratum() +
-                geom_flow(stat = "alluvium", aes.bind = TRUE) + 
+                geom_flow(stat = "alluvium") + 
                 guides(fill = "none")  + 
                 scale_fill_manual(values = clone.palette)
   ggsave("./output/Figure4/Figure4C.pdf", height = 4, width = 6)
