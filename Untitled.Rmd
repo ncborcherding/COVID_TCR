@@ -56,13 +56,14 @@ for(i in seq_along(additions.TCRB)) {
 
 meta <- conga[[]]
 conga@meta.data$TCR.both <- paste0(conga@meta.data$confirmation.neighbors.TCRA, conga@meta.data$confirmation.neighbors.TCRB)
+conga@meta.data$TCR.both[conga@meta.data$TCR.both == "NANA"] <- NA
+conga@meta.data$TCR.both <- stringr::str_remove_all(conga@meta.data$TCR.both, "NA")
+conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.1TCR.1"] <- "TCR.1"
+conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.2TCR.2"] <- "TCR.2"
 
 df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
                   conga[[]])
-df$TCR.both[df$TCR.both == "NANA"] <- NA
-df$TCR.both <- stringr::str_remove_all(df$TCR.both, "NA")
-df$TCR.both[df$TCR.both == "TCR.1TCR.1"] <- "TCR.1"
-df$TCR.both[df$TCR.both == "TCR.2TCR.2"] <- "TCR.2"
+
 
 df.sub <- subset(df, !is.na(confirmation.seq))
 df.sub2 <- subset(df, !is.na(TCR.both))
@@ -76,7 +77,9 @@ ggplot() +
                size = 4, shape =21, stroke = 0.2) + 
     scale_fill_manual(values = brewer.pal(5, "RdYlBu")) +
     theme_void()
-ggsave("added_edit.distance.png", height = 4, width = 5)
+#ggsave("added_edit.distance.png", height = 4, width = 5)
+
+saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 ```
 
 # Figure 4
@@ -84,18 +87,23 @@ ggsave("added_edit.distance.png", height = 4, width = 5)
 conga$TCRA.COVID <- "No"
 conga$TCRA.COVID[grepl("SARS-CoV-2", conga$TRA_Epitope.species)] <- "Yes"
 conga$TCRA.COVID[!is.na(conga$TCRA.epitope)] <- "Yes"
+conga$TCRA.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRA)] <- "Yes"
 TCRA.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRA.COVID)
 TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
 
 conga$TCRB.COVID <- "No"
 conga$TCRB.COVID[grepl("SARS-CoV-2", conga$TRB_Epitope.species)] <- "Yes"
 conga$TCRB.COVID[!is.na(conga$TCRB.epitope)] <- "Yes"
+conga$TCRB.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRB)] <- "Yes"
 TCRB.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRB.COVID)
 TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
+
+
 
 SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 
 updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
+write.csv(updated.shared.clones, "./output/Spike.Specific.clones.csv")
 dir.create("./output/Figure4")
 ```
 
@@ -211,30 +219,30 @@ rownames(sig.results2) <- stringr::str_remove_all(rownames(sig.results2), "_UCel
 
 KW.sig.pathways <- sig.results %>%
                         filter(p.value < 0.05) %>%
-                        slice_max(order_by = Chi.square, n = 200) %>%
+                        slice_max(order_by = Chi.square, n = 400) %>%
                         rownames() 
 
 ANOVA.sig.pathways <- sig.results2 %>%
                         filter(p.value < 0.05) %>%
-                        slice_max(order_by = f.value, n = 200) %>%
+                        slice_max(order_by = f.value, n = 400) %>%
                         rownames()
 
 pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
 old.pathways <- read.csv("./output/int.pathways.csv")
 
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
-pathways.intersect <- pathways.intersect[-c(8,10,11,15,16)]
+#pathways.intersect <- pathways.intersect[-c(8,10,11,15,16)]
 write(pathways.intersect, "output/Agspecific.intersected.pathways.txt")
 
 summary <- ES2 %>%
   group_by(timepoint) %>%
   summarise(across(pathways.intersect, median))
-
+summary <- summary[,-c(which(colSums(summary[2:25]) == 0)+1)]
 normalize <- function(x) {
       (x- min(x)) /(max(x)-min(x))
 }
 
-for(i in 2:49) {
+for(i in 2:23) {
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
@@ -244,62 +252,64 @@ rownames(summary) <- summary$timepoint
 
 
 pdf("./output/Figure4/Figure4b.pdf", height = 8, width = 10)
-pheatmap::pheatmap(t(summary[,2:49]))
+pheatmap::pheatmap(t(summary[,2:23]))
 dev.off()
 ```
 
 Figure 4C 
 ```{r}
+"%!in%" <- Negate("%in%")
 dir.create("./output/Figure4")
-conga$TCRA.COVID <- "No"
-conga$TCRA.COVID[grepl("SARS-CoV-2", conga$TRA_Epitope.species)] <- "Yes"
-conga$TCRA.COVID[!is.na(conga$TCRA.epitope)] <- "Yes"
-TCRA.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRA.COVID)
-TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
-
-conga$TCRB.COVID <- "No"
-conga$TCRB.COVID[grepl("SARS-CoV-2", conga$TRB_Epitope.species)] <- "Yes"
-conga$TCRB.COVID[!is.na(conga$TCRB.epitope)] <- "Yes"
-TCRB.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRB.COVID)
-TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
 
 SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 
-updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
-clone.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(249)
-names(clone.palette) <- updated.shared.clones
+df <- unique(SeuratObj[[]][SeuratObj$CTaa %in% updated.shared.clones, c("CTaa", "timepoint")])
+duplicated <- unique(df$CTaa[which(duplicated(df$CTaa))])
+not.duplicated <- unique(df$CTaa[which(!duplicated(df$CTaa))])
+not.duplicated <- not.duplicated[not.duplicated %!in% duplicated]
+
+clone.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(length(duplicated))
+
+names(clone.palette) <- duplicated
+pal2 <- rep("grey", length(not.duplicated))
+names(pal2) <- not.duplicated
+clone.palette <- c(clone.palette, pal2)
 
 return.cc <- compareClonotypes(SeuratObj, 
-                  clonotypes = updated.shared.clones, 
+                  clonotypes = unique(df$CTaa), 
                   split.by = "timepoint",
                   cloneCall="aa", 
                   graph = "alluvial",
                   exportTable = TRUE)
-uni.clones <- unique(return.cc$Clonotypes[return.cc$Sample == "d28"])
-"%!in%" <- Negate("%in%")
+
 all.times <- c("d28", "d60", "d110", "d201")
 output <- NULL
-for(i in seq_along(uni.clones)) {
-  x <- return.cc[return.cc$Clonotypes == uni.clones[i],]
+for(i in seq_along(duplicated)) {
+  x <- return.cc[return.cc$Clonotypes == duplicated[i],]
   placement <- names(which(table(x$Sample) == 1))
   new.times <- all.times[all.times %!in% placement]
   rep.value <- length(new.times)
-  y <- data.frame(Clonotypes = rep(uni.clones[i], rep.value), Proportion = rep(0, rep.value), Sample = new.times)
+  y <- data.frame(Clonotypes = rep(duplicated[i], rep.value), Proportion = rep(0, rep.value), Sample = new.times)
   output <- rbind(output, y)
   
 }
-  return.cc <- rbind(return.cc, output)
+  return.cc <- unique(rbind(return.cc, output))
   return.cc$Sample <- factor(return.cc$Sample, levels = c("d28", "d60", "d110", "d201"))
+  return.cc$Clonotypes <- as.vector(return.cc$Clonotypes)
+  
+  
+  #return.cc$Clonotypes <- factor(return.cc$Clonotypes, levels = names(clone.palette))
   ggplot(return.cc, aes(x = Sample, 
                         fill = Clonotypes, 
                         group = Clonotypes,
-                    stratum = Clonotypes, 
-                    alluvium = Clonotypes, 
-                    y = Proportion, label = Clonotypes)) +
+                        stratum = Clonotypes, 
+                        alluvium = Clonotypes, 
+                         y = Proportion, 
+                        label = Clonotypes)) +
                 theme_classic() +
                 theme(axis.title.x = element_blank()) + 
                 geom_stratum() +
-                geom_flow(stat = "alluvium") + 
+                geom_flow(stat = "alluvium", aes.bind = TRUE) + 
                 guides(fill = "none")  + 
                 scale_fill_manual(values = clone.palette)
   ggsave("./output/Figure4/Figure4C.pdf", height = 4, width = 6)
@@ -312,10 +322,59 @@ seuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.r
 seuratObj <- annotateDB(seuratObj, chains = "TRB", edit.distance = 0)
 seuratObj <- annotateDB(seuratObj, chains = "TRA", edit.distance = 0)
 
+seuratObj$TRAV <- stringr::str_split(seuratObj$CTgene, "[.]", simplify = TRUE)[,1]
+seuratObj$TRBV <- stringr::str_split(seuratObj$CTgene, "_", simplify = TRUE)[,2]
+seuratObj$TRBV <- stringr::str_split(seuratObj$TRBV, "[.]", simplify = TRUE)[,1]
+
+meta <- conga[[]]
+meta <- meta[!is.na(meta$confirmation.seq),]
+meta <- meta[order(meta$confirmation.seq),]
+confirm.TCRA.gene <- as.vector(meta$TRAV)
+confirm.TCRB.gene <- as.vector(meta$TRBV)
+confirm.TCRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
+confirm.TCRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
+edit.distance <- 2
+
+write.csv(confirm.TCRA, "./output/TCRA.confirm.csv")
+write.csv(confirm.TCRB, "./output/TCRB.confirm.csv")
+
+TCRA <- stringr::str_split(seuratObj[[]]$CTaa, "_", simplify = TRUE)[,1]
+TCRB <- stringr::str_split(seuratObj[[]]$CTaa, "_", simplify = TRUE)[,2]
+    
+additions.TCRA <- lapply(confirm.TCRA, function(x) {
+      pos <- which(stringdist(x, TCRA, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRA, method = "lv") > 0)
+      pos
+})
+
+additions.TCRB <- lapply(confirm.TCRB, function(x) {
+      pos <- which(stringdist(x, TCRB, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRB, method = "lv") > 0)
+      pos
+    })
+
+seuratObj@meta.data$confirmation.neighbors.TCRA <- NA
+seuratObj@meta.data$confirmation.neighbors.TCRB <- NA
+
+for(i in seq_along(additions.TCRA)) {
+  idx.A <- as.vector(seuratObj@meta.data$TRAV[additions.TCRA[[i]]])
+  idx.A <- which(idx.A == confirm.TCRA.gene[i])
+  
+  seuratObj@meta.data$confirmation.neighbors.TCRA[additions.TCRA[[i]][idx.A]] <- paste0("TCR.", i)
+}
+
+for(i in seq_along(additions.TCRB)) {
+   idx.B <- as.vector(seuratObj@meta.data$TRBV[additions.TCRB[[i]]])
+  idx.B <- which(idx.B == confirm.TCRB.gene[i])
+  seuratObj@meta.data$confirmation.neighbors.TCRB[additions.TCRB[[i]][idx.B]] <- paste0("TCR.", i)
+}
+
+
+
 #Spike 167-180 epitope
 sequence <- read.csv("./sequenceInfo/Sequences.csv")
 CTaa <- as.data.frame(stringr::str_split(seuratObj$CTaa, "_", simplify = TRUE))
-TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TA <- which(CTaa$V1 %in% sequence$cdr3a)
 TB <-which(CTaa$V2 %in% sequence$cdr3b)
 
 seuratObj$TCRB.S167.180<- NA
@@ -373,18 +432,21 @@ seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.S167.180), "S167.180", NA
 seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.S815.830), "S815.830", seuratObj$TCRA.epitope)
 seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.VDJ.db) & is.na(seuratObj$TCRA.epitope), seuratObj$TCRA.VDJ.db, seuratObj$TCRA.epitope)
 
-
 seuratObj$TCRA.COVID <- "No"
-seuratObj$TCRA.COVID[grepl("SARS-CoV-2", seuratObj$TRA_Epitope.species)] <- "Yes"
+seuratObj$TCRA.COVID[grepl("Spike", seuratObj$TRA_Epitope.target)] <- "Yes"
 seuratObj$TCRA.COVID[!is.na(seuratObj$TCRA.epitope)] <- "Yes"
+seuratObj$TCRA.COVID[!is.na(seuratObj$confirmation.neighbors.TCRA)] <- "Yes"
 TCRA.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRA.COVID)
 TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
 
 seuratObj$TCRB.COVID <- "No"
-seuratObj$TCRB.COVID[grepl("SARS-CoV-2", seuratObj$TRB_Epitope.species)] <- "Yes"
-seuratObj$TCRB.COVID[!is.na(seuratObj$TCRB.epitope)] <- "Yes"
+seuratObj$TCRB.COVID[grepl("Spike", seuratObj$TRB_Epitope.target)] <- "Yes"
+#seuratObj$TCRB.COVID[!is.na(seuratObj$TCRB.epitope)] <- "Yes"
+seuratObj$TCRB.COVID[!is.na(seuratObj$confirmation.neighbors.TCRB)] <- "Yes"
 TCRB.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRB.COVID)
 TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
+
+overall.spike.specific.tcells <- write.csv(unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)), "./output/spike.clones_overall.csv")
 
 subset.Obj <- subset(seuratObj, CTaa %in% unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)))
 subset.Obj <- subset(subset.Obj, CD8.pos == "No")
@@ -467,7 +529,6 @@ pathways.intersect <- intersect(W.sig.pathways, T.sig.pathways)
 old.pathways <- read.csv("./output/int.pathways.csv")
 
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
-pathways.intersect <- pathways.intersect[-c(8,10,11,15,16)]
 write(pathways.intersect, "./output/Figure6_Agspecific.intersected.pathways.txt")
 
 ES2$timetissue <- paste0(ES2$timepoint, "_", ES2$tissue)
@@ -475,11 +536,12 @@ summary <- ES2 %>%
   group_by(timetissue) %>%
   summarise(across(pathways.intersect, median))
 
+
 normalize <- function(x) {
       (x- min(x)) /(max(x)-min(x))
 }
 
-for(i in 2:56) {
+for(i in 2:49) {
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
@@ -489,6 +551,6 @@ rownames(summary) <- summary$timetissue
 
 
 pdf("./output/Figure6/Figure6b.pdf", height = 8, width = 14)
-pheatmap::pheatmap(t(summary[,2:56]))
+pheatmap::pheatmap(t(summary[,2:49]))
 dev.off()
 ```
