@@ -454,6 +454,7 @@ overall.spike.specific.tcells <- write.csv(unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa
 
 subset.Obj <- subset(seuratObj, CTaa %in% unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)))
 subset.Obj <- subset(subset.Obj, CD8.pos == "No")
+subset.Obj <- subset(subset.Obj, timepoint != "d110")
 dir.create("./output/Figure6")
 ```
 
@@ -545,7 +546,7 @@ normalize <- function(x) {
       (x- min(x)) /(max(x)-min(x))
 }
 
-for(i in 2:49) {
+for(i in 2:40) {
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
@@ -555,6 +556,6 @@ rownames(summary) <- summary$timetissue
 
 
 pdf("./output/Figure6/Figure6b.pdf", height = 8, width = 14)
-pheatmap::pheatmap(t(summary[,2:49]))
+pheatmap::pheatmap(t(summary[,2:40]))
 dev.off()
 ```
