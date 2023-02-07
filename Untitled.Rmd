@@ -111,6 +111,7 @@ dir.create("./output/Figure4")
 Figure 4A
 
 ```{r}
+SeuratObj <- subset(SeuratObj, timepoint != "d110")
 subset.obj <- subset(SeuratObj, CTaa %in% updated.shared.clones)
 subset.obj$timeline <- "Late"
 subset.obj$timeline[subset.obj$timepoint %in% c("d28", "d60")] <- "Early"
@@ -232,7 +233,9 @@ pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
 old.pathways <- read.csv("./output/int.pathways.csv")
 
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
-#pathways.intersect <- pathways.intersect[-c(8,10,11,15,16)]
+pathways.intersect <- pathways.intersect[-which(pathways.intersect %in% c( "BIOCARTA_FIBRINOLYSIS_PATHWAY", "BIOCARTA_AMI_PATHWAY", "BIOCARTA_EXTRINSIC_PATHWAY"))]
+
+
 write(pathways.intersect, "output/Agspecific.intersected.pathways.txt")
 
 summary <- ES2 %>%
@@ -243,7 +246,7 @@ normalize <- function(x) {
       (x- min(x)) /(max(x)-min(x))
 }
 
-for(i in 2:75) {
+for(i in 2:74) {
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
@@ -252,8 +255,8 @@ rownames(summary) <- summary$timepoint
 
 
 
-pdf("./output/Figure4/Figure4b.pdf", height = 8, width = 10)
-pheatmap::pheatmap(t(summary[,2:75]))
+pdf("./output/Figure4/Figure4b.pdf", height = 10, width = 10)
+pheatmap::pheatmap(t(summary[,2:74]))
 dev.off()
 ```
 
@@ -263,6 +266,7 @@ Figure 4C
 dir.create("./output/Figure4")
 
 SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+SeuratObj <- subset(SeuratObj, timepoint != "d110")
 
 df <- unique(SeuratObj[[]][SeuratObj$CTaa %in% updated.shared.clones, c("CTaa", "timepoint")])
 duplicated <- unique(df$CTaa[which(duplicated(df$CTaa))])
@@ -284,7 +288,7 @@ return.cc <- compareClonotypes(SeuratObj,
                   graph = "alluvial",
                   exportTable = TRUE)
 
-all.times <- c("d28", "d60", "d110", "d201")
+all.times <- c("d28", "d60", "d201")
 output <- NULL
 for(i in seq_along(duplicated)) {
   x <- return.cc[return.cc$Clonotypes == duplicated[i],]
@@ -296,7 +300,7 @@ for(i in seq_along(duplicated)) {
   
 }
   return.cc <- unique(rbind(return.cc, output))
-  return.cc$Sample <- factor(return.cc$Sample, levels = c("d28", "d60", "d110", "d201"))
+  return.cc$Sample <- factor(return.cc$Sample, levels = c("d28", "d60", "d201"))
   
   return.cc$Clonotypes <- factor(return.cc$Clonotypes, levels = names(clone.palette))
   ggplot(return.cc, aes(x = Sample, 
