@@ -1356,6 +1356,1072 @@ ggplot() +
 ggsave("./output/Figure3/Figure3F.png", height = 4, width = 5, dpi = 600)
 ```
 
+################
+#Figure 4 Graphs
+################
+```{r cars}
+library(Seurat)
+library(stringdist)
+conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
+conga <- annotateDB(conga, chains = "TRB", edit.distance = 0)
+conga <- annotateDB(conga, chains = "TRA", edit.distance = 0)
+
+meta <- conga[[]]
+meta <- meta[!is.na(meta$confirmation.seq),]
+meta <- meta[order(meta$confirmation.seq),]
+
+confirm.TCRA.gene <- as.vector(meta$TRAV)
+confirm.TCRB.gene <- as.vector(meta$TRBV)
+confirm.TCRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
+confirm.TCRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
+edit.distance <- 2
+
+TCRA <- stringr::str_split(conga[[]]$CTaa, "_", simplify = TRUE)[,1]
+TCRB <- stringr::str_split(conga[[]]$CTaa, "_", simplify = TRUE)[,2]
+    
+additions.TCRA <- lapply(confirm.TCRA, function(x) {
+      pos <- which(stringdist(x, TCRA, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRA, method = "lv") > 0)
+      pos
+})
+
+additions.TCRB <- lapply(confirm.TCRB, function(x) {
+      pos <- which(stringdist(x, TCRB, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRB, method = "lv") > 0)
+      pos
+    })
+
+conga@meta.data$confirmation.neighbors.TCRA <- NA
+conga@meta.data$confirmation.neighbors.TCRB <- NA
+
+for(i in seq_along(additions.TCRA)) {
+  idx.A <- as.vector(conga@meta.data$TRAV[additions.TCRA[[i]]])
+  idx.A <- which(idx.A == confirm.TCRA.gene[i])
+  
+  conga@meta.data$confirmation.neighbors.TCRA[additions.TCRA[[i]][idx.A]] <- paste0("TCR.", i)
+}
+
+for(i in seq_along(additions.TCRB)) {
+   idx.B <- as.vector(conga@meta.data$TRBV[additions.TCRB[[i]]])
+  idx.B <- which(idx.B == confirm.TCRB.gene[i])
+  conga@meta.data$confirmation.neighbors.TCRB[additions.TCRB[[i]][idx.B]] <- paste0("TCR.", i)
+}
+
+meta <- conga[[]]
+conga@meta.data$TCR.both <- paste0(conga@meta.data$confirmation.neighbors.TCRA, conga@meta.data$confirmation.neighbors.TCRB)
+conga@meta.data$TCR.both[conga@meta.data$TCR.both == "NANA"] <- NA
+conga@meta.data$TCR.both <- stringr::str_remove_all(conga@meta.data$TCR.both, "NA")
+conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.1TCR.1"] <- "TCR.1"
+conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.2TCR.2"] <- "TCR.2"
+
+df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
+                  conga[[]])
+
+
+df.sub <- subset(df, !is.na(confirmation.seq))
+df.sub2 <- subset(df, !is.na(TCR.both))
+write.csv(df.sub2, "Trex_edit.distance2_matchedVgenes.csv")
+
+ggplot() +
+    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n), 
+               fill = "grey", shape =21, stroke = 0.1) + 
+  geom_point(data =df.sub2, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = TCR.both), shape =21, stroke = 0.1) + 
+    geom_point(data = df.sub, aes(x=phateTrex_1, y = phateTrex_2, fill = confirmation.seq), 
+               size = 4, shape =21, stroke = 0.2) + 
+    scale_fill_manual(values = brewer.pal(5, "RdYlBu")) +
+    theme_void()
+#ggsave("added_edit.distance.png", height = 4, width = 5)
+
+saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
+```
+
+# Figure 4
+```{r}
+conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
+conga$TCRA.COVID <- "No"
+conga$TCRA.COVID[grepl("Spike", conga$TRA_Epitope.target)] <- "Yes"
+conga$TCRA.COVID[!is.na(conga$TCRA.epitope)] <- "Yes"
+conga$TCRA.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRA)] <- "Yes"
+TCRA.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRA.COVID)
+TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
+
+conga$TCRB.COVID <- "No"
+conga$TCRB.COVID[grepl("Spike", conga$TRB_Epitope.target)] <- "Yes"
+conga$TCRB.COVID[!is.na(conga$TCRB.epitope)] <- "Yes"
+conga$TCRB.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRB)] <- "Yes"
+TCRB.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRB.COVID)
+TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
+
+
+
+SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+
+updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
+write.csv(updated.shared.clones, "./output/Spike.Specific.clones.csv")
+dir.create("./output/Figure4")
+```
+
+Figure 4A
+
+```{r}
+SeuratObj <- subset(SeuratObj, timepoint != "d110")
+subset.obj <- subset(SeuratObj, CTaa %in% updated.shared.clones)
+subset.obj$timeline <- "Late"
+subset.obj$timeline[subset.obj$timepoint %in% c("d28", "d60")] <- "Early"
+
+Idents(subset.obj) <- "timeline"
+EvL.markers <- FindMarkers(subset.obj, 
+                           ident.1 = "Early",
+                           test.use = "MAST", 
+                           latent.vars = "donor", 
+                           logfc.threshold = 0,
+                           min.pct = 0,
+                           pseudocount.use = 0.1)
+
+write.csv(EvL.markers, "./output/Tfh.DEG.EarlyvsLate.csv")
+EvL.markers <- EvL.markers %>%
+                mutate(Percent.Delta = pct.1 - pct.2)
+EvL.markers$genes <- rownames(EvL.markers)
+rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
+
+top10 <- EvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_max(order_by = avg_log2FC, n = 10)
+
+bottom10 <- EvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_min(order_by = avg_log2FC, n = 10)
+
+EvL.plot <- ggplot(EvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+  geom_point(aes(size = Percent.Delta), color = "grey") + 
+  geom_point(data=subset(EvL.markers, genes %in% top10$genes),
+             aes(size = Percent.Delta), color = rb.palette[1]) + 
+  geom_point(data=subset(EvL.markers, genes %in% bottom10$genes),
+             aes(size = Percent.Delta), color = rb.palette[11]) + 
+  geom_text_repel(data=subset(EvL.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  theme_classic() + 
+  scale_size(range = c(0.1,3)) + 
+  geom_hline(yintercept = 1.3) + 
+  geom_vline(xintercept = 0)
+
+
+
+Idents(subset.obj) <- "timepoint"
+FvL.markers <- FindMarkers(subset.obj, 
+                           ident.1 = "d28",
+                           ident.2 = "d201",
+                           test.use = "MAST", 
+                           latent.vars = "donor", 
+                           logfc.threshold = 0,
+                           min.pct = 0,
+                           pseudocount.use = 0.1)
+
+write.csv(FvL.markers, "./output/Tfh.DEG.d28vsd201.csv")
+
+FvL.markers <- FvL.markers %>%
+                mutate(Percent.Delta = pct.1 - pct.2)
+FvL.markers$genes <- rownames(FvL.markers)
+
+top10 <- FvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_max(order_by = avg_log2FC, n = 10)
+
+bottom10 <- FvL.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_min(order_by = avg_log2FC, n = 10)
+
+FvL.plot <- ggplot(FvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+  geom_point(aes(size = Percent.Delta), color = "grey") + 
+  geom_point(data=subset(FvL.markers, genes %in% top10$genes),
+             aes(size = Percent.Delta), color = rb.palette[1]) + 
+  geom_point(data=subset(FvL.markers, genes %in% bottom10$genes),
+             aes(size = Percent.Delta), color = rb.palette[11]) + 
+  geom_text_repel(data=subset(FvL.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  theme_classic() + 
+  scale_size(range = c(0.1,3)) + 
+  geom_hline(yintercept = 1.3) + 
+  geom_vline(xintercept = 0)
+
+EvL.plot + FvL.plot
+ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 10, dpi = 600)
+
+```
+
+```{r}
+ES <- readRDS("./data/processedData/enrichmentResults.rds")
+meta <- subset.obj[[]]
+
+ES2 <- ES[rownames(ES) %in% rownames(meta),]
+colnames(ES2) <- stringr::str_remove_all(colnames(ES2), "_UCell")
+variances <- apply(ES2, 2, var)
+#ES2 <- ES2[,-which(variances == 0)]
+
+pathways <- colnames(ES2)
+
+ES2 <- merge(ES2, meta, by = 0)
+
+sig.results <- getSignificance(ES2, 
+                               group = "timepoint", 
+                               gene.sets = pathways, 
+                               fit = "KW")
+rownames(sig.results) <- stringr::str_remove_all(rownames(sig.results), "_UCell")
+
+sig.results2 <- getSignificance(ES2, 
+                               group = "timepoint", 
+                               gene.sets = pathways, 
+                               fit = "ANOVA")
+rownames(sig.results2) <- stringr::str_remove_all(rownames(sig.results2), "_UCell")
+
+KW.sig.pathways <- sig.results %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = Chi.square, n = 400) %>%
+                        rownames() 
+
+ANOVA.sig.pathways <- sig.results2 %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = f.value, n = 400) %>%
+                        rownames()
+
+pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
+old.pathways <- read.csv("./output/int.pathways.csv")
+
+pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
+pathways.intersect <- pathways.intersect[-which(pathways.intersect %in% c( "BIOCARTA_FIBRINOLYSIS_PATHWAY", "BIOCARTA_AMI_PATHWAY", "BIOCARTA_EXTRINSIC_PATHWAY"))]
+
+
+write(pathways.intersect, "output/Agspecific.intersected.pathways.txt")
+
+summary <- ES2 %>%
+  group_by(timepoint) %>%
+  summarise(across(pathways.intersect, median))
+
+normalize <- function(x) {
+      (x- min(x)) /(max(x)-min(x))
+}
+
+for(i in 2:74) {
+  summary[,i] <- normalize(summary[,i])
+}
+summary <- as.data.frame(summary)
+
+rownames(summary) <- summary$timepoint
+
+
+
+pdf("./output/Figure4/Figure4b.pdf", height = 10, width = 10)
+pheatmap::pheatmap(t(summary[,2:74]))
+dev.off()
+```
+
+Figure 4C 
+```{r}
+"%!in%" <- Negate("%in%")
+dir.create("./output/Figure4")
+
+SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
+SeuratObj <- subset(SeuratObj, timepoint != "d110")
+
+df <- unique(SeuratObj[[]][SeuratObj$CTaa %in% updated.shared.clones, c("CTaa", "timepoint")])
+duplicated <- unique(df$CTaa[which(duplicated(df$CTaa))])
+not.duplicated <- unique(df$CTaa[which(!duplicated(df$CTaa))])
+not.duplicated <- not.duplicated[not.duplicated %!in% duplicated]
+
+
+clone.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(length(duplicated))
+
+names(clone.palette) <- duplicated
+pal2 <- rep("grey", length(not.duplicated))
+names(pal2) <- not.duplicated
+clone.palette <- c(clone.palette, pal2)
+
+return.cc <- compareClonotypes(SeuratObj, 
+                  clonotypes = unique(df$CTaa), 
+                  split.by = "timepoint",
+                  cloneCall="aa", 
+                  graph = "alluvial",
+                  exportTable = TRUE)
+
+all.times <- c("d28", "d60", "d201")
+output <- NULL
+for(i in seq_along(duplicated)) {
+  x <- return.cc[return.cc$Clonotypes == duplicated[i],]
+  placement <- names(which(table(x$Sample) == 1))
+  new.times <- all.times[all.times %!in% placement]
+  rep.value <- length(new.times)
+  y <- data.frame(Clonotypes = rep(duplicated[i], rep.value), Proportion = rep(0, rep.value), Sample = new.times)
+  output <- rbind(output, y)
+  
+}
+  return.cc <- unique(rbind(return.cc, output))
+  return.cc$Sample <- factor(return.cc$Sample, levels = c("d28", "d60", "d201"))
+  
+  return.cc$Clonotypes <- factor(return.cc$Clonotypes, levels = names(clone.palette))
+  ggplot(return.cc, aes(x = Sample, 
+                        fill = Clonotypes, 
+                        group = Clonotypes,
+                        stratum = Clonotypes, 
+                        alluvium = Clonotypes, 
+                         y = Proportion, 
+                        label = Clonotypes)) +
+                theme_classic() +
+                theme(axis.title.x = element_blank()) + 
+                geom_stratum() +
+                geom_flow(stat = "alluvium") + 
+                guides(fill = "none")  + 
+                scale_fill_manual(values = clone.palette)
+  ggsave("./output/Figure4/Figure4C.pdf", height = 4, width = 6)
+```
+
+#################
+# Figure 6 Graphs
+#################
+
+```{r}
+seuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
+seuratObj <- annotateDB(seuratObj, chains = "TRB", edit.distance = 0)
+seuratObj <- annotateDB(seuratObj, chains = "TRA", edit.distance = 0)
+
+seuratObj$TRAV <- stringr::str_split(seuratObj$CTgene, "[.]", simplify = TRUE)[,1]
+seuratObj$TRBV <- stringr::str_split(seuratObj$CTgene, "_", simplify = TRUE)[,2]
+seuratObj$TRBV <- stringr::str_split(seuratObj$TRBV, "[.]", simplify = TRUE)[,1]
+
+meta <- conga[[]]
+meta <- meta[!is.na(meta$confirmation.seq),]
+meta <- meta[order(meta$confirmation.seq),]
+confirm.TCRA.gene <- as.vector(meta$TRAV)
+confirm.TCRB.gene <- as.vector(meta$TRBV)
+confirm.TCRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
+confirm.TCRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
+edit.distance <- 2
+
+write.csv(confirm.TCRA, "./output/TCRA.confirm.csv")
+write.csv(confirm.TCRB, "./output/TCRB.confirm.csv")
+
+TCRA <- stringr::str_split(seuratObj[[]]$CTaa, "_", simplify = TRUE)[,1]
+TCRB <- stringr::str_split(seuratObj[[]]$CTaa, "_", simplify = TRUE)[,2]
+    
+additions.TCRA <- lapply(confirm.TCRA, function(x) {
+      pos <- which(stringdist(x, TCRA, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRA, method = "lv") > 0)
+      pos
+})
+
+additions.TCRB <- lapply(confirm.TCRB, function(x) {
+      pos <- which(stringdist(x, TCRB, method = "lv") <= edit.distance & 
+                     stringdist(x, TCRB, method = "lv") > 0)
+      pos
+    })
+
+seuratObj@meta.data$confirmation.neighbors.TCRA <- NA
+seuratObj@meta.data$confirmation.neighbors.TCRB <- NA
+
+for(i in seq_along(additions.TCRA)) {
+  idx.A <- as.vector(seuratObj@meta.data$TRAV[additions.TCRA[[i]]])
+  idx.A <- which(idx.A == confirm.TCRA.gene[i])
+  
+  seuratObj@meta.data$confirmation.neighbors.TCRA[additions.TCRA[[i]][idx.A]] <- paste0("TCR.", i)
+}
+
+for(i in seq_along(additions.TCRB)) {
+   idx.B <- as.vector(seuratObj@meta.data$TRBV[additions.TCRB[[i]]])
+  idx.B <- which(idx.B == confirm.TCRB.gene[i])
+  seuratObj@meta.data$confirmation.neighbors.TCRB[additions.TCRB[[i]][idx.B]] <- paste0("TCR.", i)
+}
+
+
+
+#Spike 167-180 epitope
+sequence <- read.csv("./sequenceInfo/Sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(seuratObj$CTaa, "_", simplify = TRUE))
+TA <- which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+seuratObj$TCRB.S167.180<- NA
+seuratObj$TCRB.S167.180[TB] <- "Specific"
+
+seuratObj$TCRA.S167.180 <- NA
+seuratObj$TCRA.S167.180[TA] <- "Specific"
+
+
+#Spike 815-830 epitope
+
+sequence <- read.csv("./sequenceInfo/dykema.sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(seuratObj$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+seuratObj$TCRB.S815.830 <- NA
+seuratObj$TCRB.S815.830[TB] <- "Specific"
+
+seuratObj$TCRA.S815.830 <- NA
+seuratObj$TCRA.S815.830[TA] <- "Specific"
+
+# VDJdb sequence
+
+sequences <- read.delim("./sequenceInfo/VDJdb.tsv")
+sequences <- sequences[sequences$MHC.class == "MHCII" & sequences$Epitope.gene == "Spike",]
+
+epitope <- c("NCTFEYVSQPFLMDL" = "S164.179",
+"RISNCVADYSVLYNS" = "S356.371",
+"NFSQILPDPSKPSKR" = "S800.815",
+"HWFVTQRNFYEPQII" = "S1101.1115",
+"VGGNYNYLYRLFRKS" = "S445.459",
+"NNSYECDIPIGAGIC" = "S657.671")
+
+seuratObj$TCRB.VDJ.db <- NA
+seuratObj$TCRA.VDJ.db <- NA
+for (i in seq_along(epitope)) {
+  sequences$Epitope[which(sequences$Epitope == names(epitope)[i])] <- epitope[i]
+  TA <- sequences[sequences$Gene == "TRA" & sequences$Epitope == epitope[i], ]
+  TB <- sequences[sequences$Gene == "TRB" & sequences$Epitope == epitope[i], ]
+  TA.loc <-which(CTaa$V1 %in% TA$CDR3)
+  TB.loc <-which(CTaa$V2 %in% TB$CDR3)
+  seuratObj$TCRB.VDJ.db[TB.loc] <- epitope[i]
+  seuratObj$TCRA.VDJ.db[TA.loc] <- epitope[i]
+}
+
+
+seuratObj$TCRB.epitope  <- NA
+seuratObj$TCRB.epitope <- ifelse(!is.na(seuratObj$TCRB.S167.180), "S167.180", NA)
+seuratObj$TCRB.epitope <- ifelse(!is.na(seuratObj$TCRB.S815.830), "S815.830", seuratObj$TCRB.epitope)
+seuratObj$TCRB.epitope <- ifelse(!is.na(seuratObj$TCRB.VDJ.db) & is.na(seuratObj$TCRB.epitope), seuratObj$TCRB.VDJ.db, seuratObj$TCRB.epitope)
+
+seuratObj$TCRA.epitope  <- NA
+seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.S167.180), "S167.180", NA)
+seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.S815.830), "S815.830", seuratObj$TCRA.epitope)
+seuratObj$TCRA.epitope <- ifelse(!is.na(seuratObj$TCRA.VDJ.db) & is.na(seuratObj$TCRA.epitope), seuratObj$TCRA.VDJ.db, seuratObj$TCRA.epitope)
+
+seuratObj$TCRA.COVID <- "No"
+seuratObj$TCRA.COVID[grepl("Spike", seuratObj$TRA_Epitope.target)] <- "Yes"
+seuratObj$TCRA.COVID[!is.na(seuratObj$TCRA.epitope)] <- "Yes"
+seuratObj$TCRA.COVID[!is.na(seuratObj$confirmation.neighbors.TCRA)] <- "Yes"
+TCRA.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRA.COVID)
+TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
+
+seuratObj$TCRB.COVID <- "No"
+seuratObj$TCRB.COVID[grepl("Spike", seuratObj$TRB_Epitope.target)] <- "Yes"
+#seuratObj$TCRB.COVID[!is.na(seuratObj$TCRB.epitope)] <- "Yes"
+seuratObj$TCRB.COVID[!is.na(seuratObj$confirmation.neighbors.TCRB)] <- "Yes"
+TCRB.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRB.COVID)
+TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
+
+overall.spike.specific.tcells <- write.csv(unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)), "./output/spike.clones_overall.csv")
+
+subset.Obj <- subset(seuratObj, CTaa %in% unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)))
+subset.Obj <- subset(subset.Obj, CD8.pos == "No")
+subset.Obj <- subset(subset.Obj, timepoint != "d110")
+dir.create("./output/Figure6")
+```
+
+# Figure 6A
+
+```{r}
+Idents(subset.Obj) <- "tissue"
+LNvB.markers <- FindMarkers(subset.Obj, 
+                           ident.1 = "LN",
+                           test.use = "MAST", 
+                           latent.vars = c("donor"), 
+                           logfc.threshold = 0,
+                           min.pct = 0,
+                           pseudocount.use = 0.1)
+
+write.csv(LNvB.markers, "./output/Ag.specific.LNvsBLcsv")
+LNvB.markers <- LNvB.markers %>%
+                mutate(Percent.Delta = pct.1 - pct.2)
+LNvB.markers$genes <- rownames(LNvB.markers)
+rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
+
+top10 <- LNvB.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_max(order_by = avg_log2FC, n = 10)
+
+bottom10 <- LNvB.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_min(order_by = avg_log2FC, n = 10)
+
+LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+  geom_point(aes(size = Percent.Delta), color = "grey") + 
+  geom_point(data=subset(LNvB.markers, genes %in% top10$genes),
+             aes(size = Percent.Delta), color = rb.palette[1]) + 
+  geom_point(data=subset(LNvB.markers, genes %in% bottom10$genes),
+             aes(size = Percent.Delta), color = rb.palette[11]) + 
+  geom_text_repel(data=subset(LNvB.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  theme_classic() + 
+  scale_size(range = c(0.1,3)) + 
+  geom_hline(yintercept = 1.3) + 
+  geom_vline(xintercept = 0)
+ggsave("./output/Figure6/Figure6A.png", height = 4.5, width = 5, dpi = 600)
+```
+
+```{r}
+meta <- subset.Obj[[]]
+
+ES2 <- ES[rownames(ES) %in% rownames(meta),]
+colnames(ES2) <- stringr::str_remove_all(colnames(ES2), "_UCell")
+variances <- apply(ES2, 2, var)
+#ES2 <- ES2[,-which(variances == 0)]
+
+pathways <- colnames(ES2)
+
+ES2 <- merge(ES2, meta, by = 0)
+
+sig.results <- getSignificance(ES2, 
+                               group = "tissue", 
+                               gene.sets = pathways, 
+                               fit = "Wilcoxon")
+
+sig.results2 <- getSignificance(ES2, 
+                               group = "tissue", 
+                               gene.sets = pathways, 
+                               fit = "T.test")
+
+W.sig.pathways <- sig.results %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = W.statistic, n = 200) %>%
+                        rownames() 
+
+T.sig.pathways <- sig.results2 %>%
+                        filter(p.value < 0.05) %>%
+                        slice_max(order_by = T.statistic, n = 200) %>%
+                        rownames()
+
+pathways.intersect <- intersect(W.sig.pathways, T.sig.pathways)
+old.pathways <- read.csv("./output/int.pathways.csv")
+
+pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
+write(pathways.intersect, "./output/Figure6_Agspecific.intersected.pathways.txt")
+
+ES2$timetissue <- paste0(ES2$timepoint, "_", ES2$tissue)
+summary <- ES2 %>%
+  group_by(timetissue) %>%
+  summarise(across(pathways.intersect, median))
+
+
+normalize <- function(x) {
+      (x- min(x)) /(max(x)-min(x))
+}
+
+for(i in 2:40) {
+  summary[,i] <- normalize(summary[,i])
+}
+summary <- as.data.frame(summary)
+
+rownames(summary) <- summary$timetissue
+
+
+
+pdf("./output/Figure6/Figure6b.pdf", height = 8, width = 14)
+pheatmap::pheatmap(t(summary[,2:40]))
+dev.off()
+```
+
+#################
+#Figure 7 Graphs
+################
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(harmony)
+library(scRepertoire)
+
+inventory <- read.delim("data.inventory.txt")
+inventory <- inventory[inventory$tissue == "PB",]
+samples<- inventory$sample
+
+list <- list()
+for (i in seq_along(samples)) {
+  list[[i]] <- readRDS(paste0("./data/", samples[i], "/processedRNA_SeuratObject.rds"))
+}
+
+#Merging Data
+list <- merge(list[[1]], list[-1])
+
+meta <- list[[]]
+#meta <- meta[,-which(colnames(meta) %in% colnames(data.inventory))]
+barcodes <- rownames(meta)
+meta <- merge(meta, inventory, by.x = "orig.ident", by.y = "sample")
+meta <- meta[,colnames(inventory)[-2]]
+rownames(meta) <- barcodes
+
+list <- AddMetaData(list, meta)
+
+
+list <- list %>%
+    Seurat::NormalizeData(verbose = FALSE) %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    ScaleData(verbose = FALSE) %>% 
+    RunPCA(npcs = 30, verbose = FALSE) %>%
+    RunHarmony(c("orig.ident")) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:25) %>%
+    RunUMAP(reduction = "harmony",
+            dims = 1:25,
+            n.epochs = 500) %>%
+    FindClusters(resolution = 1, 
+                 algorithm = 3) %>% 
+    identity()
+
+saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects.rds")
+
+library(scRepertoire)
+
+######################################
+#iterate to make a list of contig csvs
+######################################
+
+
+contig.list <- NULL
+for (i in seq_along(samples)){
+  contig.list[[i]] <-  read.csv(paste0("./data/", samples[i], "/filtered_contig_annotations.csv"))
+}
+names(contig.list) <- samples
+
+##################################################
+#Reducing the data to the individual barcode level
+##################################################
+combinedObject <- combineTCR(contig.list, samples = samples, filterMulti = TRUE, removeNA = TRUE, cells = "T-AB")
+
+pt <- inventory$donor[match(samples, inventory$sample)]
+combinedObject <- addVariable(combinedObject, name = "Patient", variables = pt)
+list <- combineExpression(combinedObject, list, cloneCall = "aa", group.by = "Patient")
+
+slot(list, "meta.data")$cloneType <- factor(slot(list, "meta.data")$cloneType, 
+                levels = c("Hyperexpanded (0.1 < X <= 1)", 
+                           "Large (0.01 < X <= 0.1)", 
+                            "Medium (0.001 < X <= 0.01)", 
+                            "Small (1e-04 < X <= 0.001)", 
+                            "Rare (0 < X <= 1e-04)", NA))
+
+DimPlot(list, group.by = "cloneType") + scale_color_manual(values = rev(viridis_pal(option = "B")(length(unique(list$cloneType)))))
+
+saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects.rds")
+
+list$filter  <- "Yes"
+list$filter <- ifelse(!is.na(list$CD8.annot) | !is.na(list$CD4.annot), "No", list$filter)
+list$filter <- ifelse(is.na(list$CTaa), "Yes", list$filter)
+
+list <- subset(list, filter != "Yes")
+
+list@meta.data$CD8.pos <- ifelse(list@assays$RNA@data["CD8A",] >=  0.4, "Yes", "No")
+
+dim(list)[2]
+#Check: 198257
+
+list <- list %>%
+    Seurat::NormalizeData(verbose = FALSE) %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    ScaleData(verbose = FALSE) %>% 
+    RunPCA(npcs = 30, verbose = FALSE) %>%
+    RunHarmony(c("orig.ident"), 
+               max.iter.harmony = 15) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:15) %>%
+    RunUMAP(reduction = "harmony",
+            dims = 1:15,
+            n.epochs = 500) %>%
+    FindClusters(resolution = 0.8, 
+                 algorithm = 3) %>% 
+    identity()
+
+saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
+```
+
+```{r}
+library(Trex)
+list <- annotateDB(list, chains = "TRB", edit.distance = 0)
+list<- annotateDB(list, chains = "TRA", edit.distance = 0)
+
+#Spike 167-180 epitope
+sequence <- read.csv("./sequenceInfo/Sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(list$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+list$TCRB.S167.180<- NA
+list$TCRB.S167.180[TB] <- "Specific"
+
+list$TCRA.S167.180 <- NA
+list$TCRA.S167.180[TA] <- "Specific"
+
+
+#Spike 815-830 epitope
+
+sequence <- read.csv("./sequenceInfo/dykema.sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(list$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+list$TCRB.S815.830 <- NA
+list$TCRB.S815.830[TB] <- "Specific"
+
+list$TCRA.S815.830 <- NA
+list$TCRA.S815.830[TA] <- "Specific"
+
+# VDJdb sequence
+
+sequences <- read.delim("./sequenceInfo/VDJdb.tsv")
+sequences <- sequences[sequences$MHC.class == "MHCII" & sequences$Epitope.gene == "Spike",]
+
+epitope <- c("NCTFEYVSQPFLMDL" = "S164.179",
+"RISNCVADYSVLYNS" = "S356.371",
+"NFSQILPDPSKPSKR" = "S800.815",
+"HWFVTQRNFYEPQII" = "S1101.1115",
+"VGGNYNYLYRLFRKS" = "S445.459",
+"NNSYECDIPIGAGIC" = "S657.671")
+
+list$TCRB.VDJ.db <- NA
+list$TCRA.VDJ.db <- NA
+for (i in seq_along(epitope)) {
+  sequences$Epitope[which(sequences$Epitope == names(epitope)[i])] <- epitope[i]
+  TA <- sequences[sequences$Gene == "TRA" & sequences$Epitope == epitope[i], ]
+  TB <- sequences[sequences$Gene == "TRB" & sequences$Epitope == epitope[i], ]
+  TA.loc <-which(CTaa$V1 %in% TA$CDR3)
+  TB.loc <-which(CTaa$V2 %in% TB$CDR3)
+  list$TCRB.VDJ.db[TB.loc] <- epitope[i]
+  list$TCRA.VDJ.db[TA.loc] <- epitope[i]
+}
+
+
+list$TCRB.epitope  <- NA
+list$TCRB.epitope <- ifelse(!is.na(list$TCRB.S167.180), "S167.180", NA)
+list$TCRB.epitope <- ifelse(!is.na(list$TCRB.S815.830), "S815.830", list$TCRB.epitope)
+list$TCRB.epitope <- ifelse(!is.na(list$TCRB.VDJ.db) & is.na(list$TCRB.epitope), list$TCRB.VDJ.db, list$TCRB.epitope)
+
+list$TCRB.epitope <- ifelse(grepl("Spike", list$TRB_Epitope.target) & is.na(list$TCRB.epitope), "spike", list$TCRB.epitope)
+
+list$TCRA.epitope  <- NA
+list$TCRA.epitope <- ifelse(!is.na(list$TCRA.S167.180), "S167.180", NA)
+list$TCRA.epitope <- ifelse(!is.na(list$TCRA.S815.830), "S815.830", list$TCRA.epitope)
+list$TCRA.epitope <- ifelse(!is.na(list$TCRA.VDJ.db) & is.na(list$TCRA.epitope), list$TCRA.VDJ.db, list$TCRA.epitope)
+
+list$TCRA.epitope <- ifelse(grepl("Spike", list$TRA_Epitope.target) & is.na(list$TCRA.epitope), "spike", list$TCRA.epitope)
+dir.create("./output/Figure7")
+saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
+
+
+```
+
+```{r}
+list <- readRDS(file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
+mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(list$seurat_clusters)))
+
+update_geom_defaults("point", list(stroke = 0.1))
+DimPlot(list, reduction = "umap", label = TRUE, repel = TRUE, label.size = 4, raster=FALSE, pt.size = 0.25) +
+  scale_color_manual(values = mycolors) + 
+  guides(colors = "none", fill = "none") + 
+  theme_void() + 
+  NoLegend() 
+
+ggsave("./output/Figure7/Figure7A_1.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
+```
+
+```{r}
+list$study <- "s368"
+list$study[grepl("350", list$donor)] <- "s350"
+
+df <- data.frame(list@reductions$umap@cell.embeddings, list@meta.data)
+
+sampled <- df %>%
+  group_by(study) %>%
+  sample_n(80000)
+
+#sampled$tissue <- factor(sampled$tissue, levels = c("PB", "LN"))
+
+ggplot() +
+  geom_point(data = sampled, aes(x = UMAP_1, y = UMAP_2), stroke = 0, color = "grey") + 
+  stat_density_2d(data = subset(sampled, study == "s350"), aes(x = UMAP_1, y = UMAP_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  stat_density_2d(data = subset(sampled, study == "s368"), aes(x = UMAP_1, y = UMAP_2, fill = stat(level)), 
+                  geom = "polygon", bins = 25) + 
+  facet_grid(study~.) + 
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  xlim(-8,12) + 
+  ylim(-11,7) + 
+  guides(fill = "none") + 
+  theme_void()  + 
+  theme(plot.title = element_blank(),
+        strip.text.y = element_blank())
+ggsave("./output/Figure7/Figure7B_1.png", height = 12, width = 7, dpi = 600, bg = "transparent")
+
+other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
+
+df$epitope <- NA
+
+other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
+df$epitope[c(which(df$TCRB.epitope == "S167.180"), which(df$TCRA.epitope == "S167.180"))] <- "epitope.S167.180"
+df$epitope[c(which(df$TCRB.epitope %in% other), which(df$TCRA.epitope %in% other))] <- "other.spike"
+
+ggplot() +
+  geom_density2d(data = df, aes(x = UMAP_1, y = UMAP_2), color = "black", lwd = 0.5) + 
+  geom_point(data = subset(df, !is.na(epitope)), aes(x = UMAP_1, y = UMAP_2, fill = epitope), shape=21, stroke = 0.25, size = 4) + 
+  facet_grid(study~.) + 
+  guides(fill = "none") + 
+  theme_void() + 
+  scale_fill_manual(values = rev(brewer.pal(11, "RdYlBu")[c(2,10)])) + 
+theme(plot.title = element_blank(),
+        strip.text.y = element_blank())
+ggsave("./output/Figure7/Figure7B_2.png", height = 12, width = 7, dpi = 600, bg = "transparent")
+```
+
+
+```{r}
+source("./R/utils.R")
+library(Nebulosa)
+
+genes <- c("CD4","CCR7", "CXCR5", "FOXP3", "CTLA4", "CD8A", "SELL", "ICOS", "IL2RA", "PDCD1")
+
+
+x <- plot_density(list,
+                  features = genes, 
+                  size = 0.5,
+                  combine = FALSE)
+
+for(i in seq_along(x)) {
+  x[[i]] <- x[[i]] + 
+              guides(color = "none") + 
+              scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) +
+              theme_void() + 
+              theme(plot.title = element_blank(), 
+                    plot.margin = unit(c(0.6, 0.15, 0.6, 0.15), "cm"))
+}
+
+plot_a_list(x,2,5)
+ggsave("./output/Figure7/Figure7C.png", height = 3, width = 7.5, dpi = 600)
+
+```
+
+```{r}
+spike <- read.csv("./output/spike.clones_overall.csv")
+cells <- unique(c(rownames(list[[]])[which(list$CTaa %in% spike$x)], 
+                rownames(list[[]])[!is.na(list$TCRB.epitope)], 
+                rownames(list[[]])[!is.na(list$TCRA.epitope)]))
+
+
+cells <- intersect(cells, rownames(list[[]])[which(list$CD8.pos == "No")])
+subset.Obj <- subset(list, cells = cells)
+
+
+subset.Obj <- subset.Obj %>%
+    Seurat::NormalizeData(verbose = FALSE) %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    quietTCRgenes() %>%
+    ScaleData(verbose = FALSE) %>% 
+    RunPCA(npcs = 30, verbose = FALSE) %>%
+    RunHarmony(c("orig.ident")) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:25) %>%
+    RunUMAP(reduction = "harmony",
+            dims = 1:25,
+            n.epochs = 500) %>%
+    FindClusters(resolution = 0.5, 
+                 algorithm = 3) %>% 
+    identity()
+
+subset.Obj$relative.time <- "Early"
+subset.Obj$relative.time[subset.Obj$timepoint %in% c("d201", "m6", "d110", "d84")] <- "Late"
+
+mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(subset.Obj$seurat_clusters)))
+
+update_geom_defaults("point", list(stroke = 1))
+DimPlot(subset.Obj, reduction = "umap", label = TRUE, label.size = 4, raster=FALSE, pt.size = 0.25) +
+  scale_color_manual(values = mycolors) + 
+  guides(colors = "none", fill = "none") + 
+  theme_void() + 
+  NoLegend() 
+
+ggsave("./output/Figure7/AG.specific_Figure7A_1.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
+
+df <- data.frame(subset.Obj[[]], subset.Obj@reductions$umap@cell.embeddings)
+df <- df[df$relative.time == "Late",]
+ggplot(df, aes(x=UMAP_1, y = UMAP_2)) + 
+  geom_point(aes(color = seurat_clusters)) + 
+  scale_color_manual(values = mycolors) + 
+  facet_grid(study~.) + 
+  theme_void() + 
+  guides(color = "none") + 
+  theme(plot.title = element_blank(),
+        strip.text = element_blank())
+ggsave("./output/Figure7/AG.specific_Figure7C_1.png", height = 7, width = 4, dpi = 600)
+
+
+ggplot(df, aes(x = study, fill = seurat_clusters)) + 
+  geom_bar(position = "fill") + 
+  scale_fill_manual(values = mycolors) + 
+  theme_classic() + 
+  guides(fill = "none") + 
+  theme(axis.title = element_blank())
+ggsave("./output/Figure7/AG.specific_Figure7C_2.pdf", height = 3.5, width = 4)
+
+DimPlot(subset.Obj, reduction = "umap", label.size = 4, raster=FALSE, pt.size = 0.25, group.by = "CD4.annot") +
+  scale_color_viridis(option = "H", discrete = TRUE) +  
+  guides(colors = "none", fill = "none") + 
+  theme_void()   +
+  theme(plot.title = element_blank(),
+        strip.text.x = element_blank())
+
+ggsave("./output/Figure7/AG.specific_Figure7A_4.png", height = 3.5, width = 6, dpi = 600, bg = "transparent")
+
+ggplot(df, aes(x = study, fill = CD4.annot)) + 
+  geom_bar(position = "fill") + 
+scale_fill_viridis(option = "H", discrete = TRUE) +  
+  theme_classic() + 
+  theme(axis.title = element_blank())
+ggsave("./output/Figure7/AG.specific_Figure7A_5.pdf", height = 3.5, width = 4)
+```
+
+
+
+#Figure 7B
+
+```{r}
+markers <- FindAllMarkers(subset.Obj)
+write.csv(markers, "./output/AgspecificBlood_markers.csv")
+
+top <- markers %>%
+  group_by(cluster) %>%
+  slice_max(order_by = avg_log2FC, n = 8)
+
+DotPlot(subset.Obj, features = unique(top$gene)) + 
+  scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  scale_y_discrete(limits=rev)+ 
+  coord_flip()
+ggsave("./output/Figure7/Figure7C.pdf", height = 16, width = 6)
+```
+
+```{r}
+Idents(further.subset.Obj) <- "study"
+
+
+InfvsVac.markers <- FindMarkers(further.subset.Obj, 
+                           ident.1 = "s350",
+                           test.use = "MAST", 
+                           latent.vars = c("donor"), 
+                           logfc.threshold = 0,
+                           min.pct = 0,
+                           pseudocount.use = 0.1)
+
+write.csv(InfvsVac.markers, "./output/Ag.specific.InfvsVac.markers.csv")
+InfvsVac.markers <- InfvsVac.markers %>%
+                mutate(Percent.Delta = pct.1 - pct.2)
+InfvsVac.markers$genes <- rownames(InfvsVac.markers)
+rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
+
+top10 <- InfvsVac.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_max(order_by = avg_log2FC, n = 10)
+
+bottom10 <- InfvsVac.markers %>% 
+  subset(p_val < 0.05) %>%
+  slice_min(order_by = avg_log2FC, n = 10)
+
+LNvBL.plot <- ggplot(InfvsVac.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+  geom_point(aes(size = Percent.Delta), color = "grey") + 
+  geom_point(data=subset(InfvsVac.markers, genes %in% top10$genes),
+             aes(size = Percent.Delta), color = rb.palette[1]) + 
+  geom_point(data=subset(InfvsVac.markers, genes %in% bottom10$genes),
+             aes(size = Percent.Delta), color = rb.palette[11]) + 
+  geom_text_repel(data=subset(InfvsVac.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  theme_classic() + 
+  scale_size(range = c(0.1,3)) + 
+  geom_hline(yintercept = 1.3) + 
+  geom_vline(xintercept = 0)
+ggsave("./output/Figure7/Figure7F.png", height = 4.5, width = 5, dpi = 600)
+```
+
+Figure 7E
+
+```{r}
+
+subset.Obj <- clusterTCR(subset.Obj, 
+                         group.by = "donor",
+                         chain = "TRA", 
+                         sequence = "aa")
+
+mycolors <- colorRampPalette(brewer.pal(11, "RdYlBu"))(length(na.omit(unique(subset.Obj$TRA_cluster))))
+names(mycolors) <- unique(subset.Obj$TRA_cluster)
+DimPlot(subset.Obj, group.by = "TRA_cluster") + 
+  scale_color_manual(values = mycolors) + 
+  NoLegend()
+
+df <- data.frame(subset.Obj@reductions$umap@cell.embeddings, subset.Obj@meta.data)
+df <- df %>%
+  group_by(TRA_cluster) %>%
+  mutate(n = n())
+df$TRA_cluster[df$n >= 2] <- NA
+
+mycolors <- colorRampPalette(brewer.pal(11, "RdYlBu"))(length(na.omit(unique(df$TRA_cluster))))
+
+ggplot(df, aes(x=UMAP_1, y = UMAP_2)) + 
+  geom_point(color = "grey") + 
+  geom_point(data = subset(df, !is.na(TRA_cluster)), aes(color = TRA_cluster)) + 
+  scale_color_manual(values = mycolors, na.value = "grey") + 
+  guides(color = "none") + 
+  theme_void()
+ggsave("./output/Figure7/Figure7E_1.png", height = 3.5, width = 4, dpi = 600)  
+
+
+#df <- subset(df, donor != "368-04")
+#df <- subset(df, donor != "368-13")
+ggplot(df, aes(x=UMAP_1, y = UMAP_2)) + 
+  geom_point(color = "grey") + 
+  geom_point(data = subset(df, !is.na(TRA_cluster)), aes(color = TRA_cluster)) + 
+  scale_color_manual(values = mycolors, na.value = "grey") + 
+  guides(color = "none") + 
+  facet_wrap(~donor, ncol = 5) + 
+  theme_void()
+
+ggsave("./output/Figure7/Figure7E_2.pdf", height = 3.5, width = 10)  
+
+```
+
+
+Figure 7F
+
+```{r}
+mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(subset.Obj$seurat_clusters)))
+
+DimPlot(subset.Obj, reduction = "umap", label.size = 4, raster=FALSE, pt.size = 0.25) +
+  facet_grid(subset.Obj$study~ subset.Obj$relative.time) + 
+   scale_color_manual(values = mycolors) +  
+  guides(colors = "none", fill = "none") + 
+  theme_void() + 
+  guides(color = "none") + 
+  theme(plot.title = element_blank(),
+        strip.text = element_blank())
+ggsave("./output/Figure7/Figure7F_1.pdf", height = 7, width = 8)
+
+
+df <- data.frame(subset.Obj@reductions$umap@cell.embeddings, subset.Obj@meta.data)
+df2 <- df %>%
+  group_by(study, seurat_clusters, relative.time) %>%
+  count()
+df2 <- df2 %>%
+  group_by(study, relative.time) %>%
+  mutate(sum = sum(n))
+df2$proportion <- round(df2$n/df2$sum, 3)
+
+
+UCB_lodes <- to_lodes_form(as.data.frame(UCBAdmissions),
+                           axes = 1:3,
+                           id = "Cohort")
+
+ggplot(df2, aes(y=proportion,
+                x=relative.time,
+               stratum = seurat_clusters,
+               alluvium = seurat_clusters)) + 
+  geom_alluvium(aes(fill = seurat_clusters)) + 
+  geom_stratum(aes(fill = seurat_clusters)) + 
+  scale_fill_manual(values = mycolors) + 
+  facet_grid(study~.) + 
+  guides(fill = "none") + 
+  theme_classic() + 
+    theme(plot.title = element_blank(),
+        strip.text = element_blank(), 
+        axis.title = element_blank())
+
+ggsave("./output/Figure7/Figure7F_2.pdf", height = 4.5, width = 5)
+
+```
+
+
 ############
 #Comparing the cluster output
 
