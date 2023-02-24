@@ -9,6 +9,7 @@ Trying to identify edit distances for candidate TCRs
 ```{r cars}
 library(Seurat)
 library(stringdist)
+library(Trex)
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 conga <- annotateDB(conga, chains = "TRB", edit.distance = 0)
 conga <- annotateDB(conga, chains = "TRA", edit.distance = 0)
@@ -189,8 +190,8 @@ FvL.plot <- ggplot(FvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) +
   geom_hline(yintercept = 1.3) + 
   geom_vline(xintercept = 0)
 
-EvL.plot + FvL.plot
-ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 10, dpi = 600)
+EvL.plot + FvL.plot + plot_layout(guides = "collect") & scale_size_continuous(limits = range(c(FvL.markers$Percent.Delta, EvL.markers$Percent.Delta)))
+ggsave("./output/Figure4/Figure4A.pdf", height = 4.5, width = 10, dpi = 600)
 
 ```
 

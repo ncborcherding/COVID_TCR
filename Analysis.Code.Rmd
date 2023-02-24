@@ -1609,7 +1609,7 @@ rownames(summary) <- summary$timepoint
 
 
 pdf("./output/Figure4/Figure4b.pdf", height = 10, width = 10)
-pheatmap::pheatmap(t(summary[,2:74]))
+pheatmap::pheatmap(t(summary[,2:74]), scale = "row")
 dev.off()
 ```
 
@@ -1850,7 +1850,7 @@ LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val))) +
   scale_size(range = c(0.1,3)) + 
   geom_hline(yintercept = 1.3) + 
   geom_vline(xintercept = 0)
-ggsave("./output/Figure6/Figure6A.png", height = 4.5, width = 5, dpi = 600)
+ggsave("./output/Figure6/Figure6A.pdf", height = 4.5, width = 5, dpi = 600)
 ```
 
 ```{r}
@@ -1911,7 +1911,7 @@ rownames(summary) <- summary$timetissue
 
 
 pdf("./output/Figure6/Figure6b.pdf", height = 8, width = 14)
-pheatmap::pheatmap(t(summary[,2:40]))
+pheatmap::pheatmap(t(summary[,2:40]), scale = "row")
 dev.off()
 ```
 
