@@ -1839,7 +1839,7 @@ bottom10 <- LNvB.markers %>%
   subset(p_val < 0.05) %>%
   slice_min(order_by = avg_log2FC, n = 10)
 
-LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
+LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val_adj))) + 
   geom_point(aes(size = Percent.Delta), color = "grey") + 
   geom_point(data=subset(LNvB.markers, genes %in% top10$genes),
              aes(size = Percent.Delta), color = rb.palette[1]) + 
@@ -1896,22 +1896,11 @@ summary <- ES2 %>%
   group_by(timetissue) %>%
   summarise(across(pathways.intersect, median))
 
-
-normalize <- function(x) {
-      (x- min(x)) /(max(x)-min(x))
-}
-
-for(i in 2:40) {
-  summary[,i] <- normalize(summary[,i])
-}
 summary <- as.data.frame(summary)
-
 rownames(summary) <- summary$timetissue
 
-
-
 pdf("./output/Figure6/Figure6b.pdf", height = 8, width = 14)
-pheatmap::pheatmap(t(summary[,2:40]), scale = "row")
+pheatmap::pheatmap(t(summary[,2:48]), scale = "row")
 dev.off()
 ```
 
