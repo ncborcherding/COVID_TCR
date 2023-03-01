@@ -1832,11 +1832,11 @@ LNvB.markers$genes <- rownames(LNvB.markers)
 rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
 
 top10 <- LNvB.markers %>% 
-  subset(p_val < 0.05) %>%
+  subset(p_val_adj < 0.05) %>%
   slice_max(order_by = avg_log2FC, n = 10)
 
 bottom10 <- LNvB.markers %>% 
-  subset(p_val < 0.05) %>%
+  subset(p_val_adj < 0.05) %>%
   slice_min(order_by = avg_log2FC, n = 10)
 
 LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val_adj))) + 
@@ -1845,7 +1845,7 @@ LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
              aes(size = Percent.Delta), color = rb.palette[1]) + 
   geom_point(data=subset(LNvB.markers, genes %in% bottom10$genes),
              aes(size = Percent.Delta), color = rb.palette[11]) + 
-  geom_text_repel(data=subset(LNvB.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
+  geom_text_repel(data=subset(LNvB.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 30) + 
   theme_classic() + 
   scale_size(range = c(0.1,3)) + 
   geom_hline(yintercept = 1.3) + 
