@@ -1437,6 +1437,8 @@ saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 
 # Figure 4
 ```{r}
+dir.create("./output/Figure4")
+
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 conga$TCRA.COVID <- "No"
 conga$TCRA.COVID[grepl("Spike", conga$TRA_Epitope.target)] <- "Yes"
@@ -1616,7 +1618,7 @@ dev.off()
 Figure 4C 
 ```{r}
 "%!in%" <- Negate("%in%")
-dir.create("./output/Figure4")
+
 
 SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 SeuratObj <- subset(SeuratObj, timepoint != "d110")
@@ -1670,6 +1672,167 @@ for(i in seq_along(duplicated)) {
                 guides(fill = "none")  + 
                 scale_fill_manual(values = clone.palette)
   ggsave("./output/Figure4/Figure4C.pdf", height = 4, width = 6)
+```
+
+#################
+# Figure 5 Graphs
+#################
+
+```{r}
+dir.create("./output/Figure5")
+library(eulerr)
+list <- readRDS("./processedData/Fullintegrated_seuratObjects_Tcells.rds")
+load("Trex.database.rda")
+names(Trex.database) <- c("TRA", "TRB")
+
+Trex.database[[1]] <- as.data.frame(Trex.database[[1]])
+names(Trex.database[[1]]) <- c("CDR3", "V.GENE", "D.GENE", "J.GENE", "EPITOPE.SEQ", "EPITOPE.TARGET", "EPITOPE.SPECIES", "MHC.A", "MHC.B", "TISSUE", "CELLTYPE", "PMID", "DB")
+Trex.database[[1]] <- unique(Trex.database[[1]])
+
+Trex.database[[2]] <- as.data.frame(Trex.database[[2]])
+names(Trex.database[[2]]) <- c("CDR3", "V.GENE", "D.GENE", "J.GENE", "EPITOPE.SEQ", "EPITOPE.TARGET", "EPITOPE.SPECIES", "MHC.A", "MHC.B", "TISSUE", "CELLTYPE", "PMID", "DB")      
+Trex.database[[2]] <- unique(Trex.database[[2]])
+
+list <- subset(list, donor %in% c("368-01a", "368-13", "368-22"))
+
+meta <- list[[]]
+meta$TRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
+meta$TRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
+
+
+annotateDB <- function(dat,
+                       chains = "TRB") {
+  relevent.db <- as.data.frame(Trex.database[[chains]])
+  relevent.db <- relevent.db[,c("CDR3", "EPITOPE.TARGET", "EPITOPE.SEQ", "EPITOPE.SPECIES", "TISSUE", "CELLTYPE")]
+  
+  colnames(relevent.db)[2:6] <- paste0(chains, "_", colnames(relevent.db)[2:6])
+  dat <- merge(dat, relevent.db, by.x =chains, by.y = "CDR3", all.x = TRUE)
+}
+
+meta <- annotateDB(meta, chains = "TRA")
+meta <- annotateDB(meta, chains = "TRB")
+
+meta$CMV.reactive <- "Neg"
+meta$CMV.reactive[grepl("CMV",meta$TRA_EPITOPE.SPECIES)] <- "Pos"
+meta$CMV.reactive[grepl("CMV",meta$TRB_EPITOPE.SPECIES)] <- "Pos"
+
+meta$EBV.reactive <- "Neg"
+meta$EBV.reactive[grepl("EBV",meta$TRA_EPITOPE.SPECIES)] <- "Pos"
+meta$EBV.reactive[grepl("EBV",meta$TRB_EPITOPE.SPECIES)] <- "Pos"
+
+
+```
+
+
+# Figure 5A
+
+```{r}
+library(iNEXT)
+dat.output <- NULL
+subjects <- c("368-01a", "368-13", "368-22")
+count <- 1
+
+meta2 <- meta
+
+for(i in seq_along(subjects)) {
+  
+  meta.tmp <- meta2[meta2$donor == subjects[i],]
+  meta.tmp.B <- meta.tmp[meta.tmp$tissue == "PB",]
+  meta.tmp.L <- meta.tmp[meta.tmp$tissue != "PB",]
+  b.counts <- unname(table(meta.tmp.B$CTaa))
+  l.counts <- unname(table(meta.tmp.L$CTaa))
+  dat.output[[count]] <- b.counts
+  dat.output[[(count + 1)]] <- l.counts
+  count <- (i*2)+1
+}
+
+names(dat.output) <- c("368-01a_B", "368-01a_LN", "368-13_B", "368-13_LN", "368-22_B", "368-22_LN")
+
+out <- iNEXT(dat.output, q=0, datatype="abundance") 
+
+ggiNEXT(out, type=2) 
+ggsave("./output/Figure5/Figure5A.pdf", height = 7, width = 7)
+```
+
+```{r}
+subjects <- c("368-01a", "368-13", "368-22")
+
+dat.output <- NULL
+for(i in seq_along(subjects)) {
+  meta.tmp <- meta[meta$donor == subjects[i],]
+  meta.tmp.B <- meta.tmp[meta.tmp$tissue == "PB",]
+  meta.tmp.L <- meta.tmp[meta.tmp$tissue != "PB",]
+  
+  TRA.intersect <- length(intersect(unique(meta.tmp.B$TRA), unique(meta.tmp.L$TRA)))
+  TRA.union <- length(unique(meta.tmp.B$TRA, meta.tmp.L$TRA))
+  TRA.blood <- length(unique(meta.tmp.B$TRA))
+  TRA.LN <- length(unique(meta.tmp.L$TRA))
+                                
+  
+  TRB.intersect <- length(intersect(unique(meta.tmp.B$TRB), unique(meta.tmp.L$TRB)))
+  TRB.union <- length(unique(meta.tmp.B$TRB, meta.tmp.L$TRB))
+  TRB.blood <- length(unique(meta.tmp.B$TRB))
+  TRB.LN <- length(unique(meta.tmp.L$TRB))
+  
+  combined.intersect <- length(intersect(unique(meta.tmp.B$CTaa), unique(meta.tmp.L$CTaa)))
+  combined.union <- length(unique(meta.tmp.B$CTaa, meta.tmp.L$CTaa))
+  combined.blood <- length(unique(meta.tmp.B$CTaa))
+  combined.LN <- length(unique(meta.tmp.L$CTaa))
+  
+  out <- c(subjects[i], TRA.intersect, TRA.union, TRA.blood, TRA.LN, 
+           TRB.intersect, TRB.union, TRB.blood, TRB.LN, 
+           combined.intersect, combined.union, combined.blood, combined.LN)
+  dat.output <- rbind(dat.output, out)
+}
+colnames(dat.output) <- c("subjects", "TRA.intersect", "TRA.union", "TRA.blood", "TRA.LN", 
+                          "TRB.intersect", "TRB.union", "TRB.blood", "TRB.LN",
+                          "combined.intersect", "combined.union", "combined.blood", "combined.LN")
+write.csv(dat.output, "TCRsummary.csv")
+
+chain.combo <- c("TRA", "TRB", "combined") 
+for (i in seq_along(subjects)) {
+  tmp <- dat.output[i,]
+  for(j in seq_along(chain.combo)) {
+    chain.tmp <- c(BL = as.numeric(tmp[(4*j)]), LN = as.numeric(tmp[(4*j)+1]), "BL&LN" = as.numeric(tmp[(4*j)-2]))
+    fit <- euler(chain.tmp, shape = "ellipse")
+    venn.plot <- plot(fit, 
+         quantities = TRUE,
+         labels = list(font = 4))
+    pdf(paste0("./output/Figure4/Figure5B_", subjects[i], ".", chain.combo[j], "_allTCRs.pdf"), height = 3, width = 3.5)
+      print(venn.plot)
+    dev.off()
+  }
+}
+```
+
+## Figure 5C
+
+```{r}
+library(patchwork)
+library(scRepertoire)
+
+list$compare <- paste0(list$donor, "_", list$tissue)
+plot1 <- scatterClonotype(list, 
+                 split.by = "compare",
+                 cloneCall ="aa", 
+                 x.axis = "368-01a_LN", 
+                 y.axis = "368-01a_PB") + 
+  scale_color_manual(values = rev(brewer.pal(5, "RdYlBu"))[c(1,2,5,4,3)])
+
+plot2 <- scatterClonotype(list, 
+                 split.by = "compare",
+                 cloneCall ="aa", 
+                 x.axis = "368-22_LN", 
+                 y.axis = "368-22_PB",
+                 dot.size = "total") + 
+  scale_color_manual(values = rev(brewer.pal(5, "RdYlBu"))[c(1,2,5,4,3)])
+
+
+plot1 <- plot1 + guides(color = "none", size = "none") + theme(axis.title = element_blank())
+plot2 <- plot2 + guides(color = "none", size = "none") + theme(axis.title = element_blank())
+
+plot1 + plot2 + plot_layout(ncol = 1) 
+ggsave("./output/Figure5/Figure5C.pdf", height = 8, width = 4)
 ```
 
 #################
