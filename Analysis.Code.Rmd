@@ -2089,94 +2089,7 @@ saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds
 
 ```
 
-```{r}
-list <- readRDS(file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
-mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(list$seurat_clusters)))
-
-update_geom_defaults("point", list(stroke = 0.1))
-DimPlot(list, reduction = "umap", label = TRUE, repel = TRUE, label.size = 4, raster=FALSE, pt.size = 0.25) +
-  scale_color_manual(values = mycolors) + 
-  guides(colors = "none", fill = "none") + 
-  theme_void() + 
-  NoLegend() 
-
-ggsave("./output/Figure7/Figure7A_1.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
-```
-
-```{r}
-list$study <- "s368"
-list$study[grepl("350", list$donor)] <- "s350"
-
-df <- data.frame(list@reductions$umap@cell.embeddings, list@meta.data)
-
-sampled <- df %>%
-  group_by(study) %>%
-  sample_n(80000)
-
-#sampled$tissue <- factor(sampled$tissue, levels = c("PB", "LN"))
-
-ggplot() +
-  geom_point(data = sampled, aes(x = UMAP_1, y = UMAP_2), stroke = 0, color = "grey") + 
-  stat_density_2d(data = subset(sampled, study == "s350"), aes(x = UMAP_1, y = UMAP_2, fill = stat(level)), 
-                  geom = "polygon", bins = 25) + 
-  stat_density_2d(data = subset(sampled, study == "s368"), aes(x = UMAP_1, y = UMAP_2, fill = stat(level)), 
-                  geom = "polygon", bins = 25) + 
-  facet_grid(study~.) + 
-  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
-  xlim(-8,12) + 
-  ylim(-11,7) + 
-  guides(fill = "none") + 
-  theme_void()  + 
-  theme(plot.title = element_blank(),
-        strip.text.y = element_blank())
-ggsave("./output/Figure7/Figure7B_1.png", height = 12, width = 7, dpi = 600, bg = "transparent")
-
-other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
-
-df$epitope <- NA
-
-other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
-df$epitope[c(which(df$TCRB.epitope == "S167.180"), which(df$TCRA.epitope == "S167.180"))] <- "epitope.S167.180"
-df$epitope[c(which(df$TCRB.epitope %in% other), which(df$TCRA.epitope %in% other))] <- "other.spike"
-
-ggplot() +
-  geom_density2d(data = df, aes(x = UMAP_1, y = UMAP_2), color = "black", lwd = 0.5) + 
-  geom_point(data = subset(df, !is.na(epitope)), aes(x = UMAP_1, y = UMAP_2, fill = epitope), shape=21, stroke = 0.25, size = 4) + 
-  facet_grid(study~.) + 
-  guides(fill = "none") + 
-  theme_void() + 
-  scale_fill_manual(values = rev(brewer.pal(11, "RdYlBu")[c(2,10)])) + 
-theme(plot.title = element_blank(),
-        strip.text.y = element_blank())
-ggsave("./output/Figure7/Figure7B_2.png", height = 12, width = 7, dpi = 600, bg = "transparent")
-```
-
-
-```{r}
-source("./R/utils.R")
-library(Nebulosa)
-
-genes <- c("CD4","CCR7", "CXCR5", "FOXP3", "CTLA4", "CD8A", "SELL", "ICOS", "IL2RA", "PDCD1")
-
-
-x <- plot_density(list,
-                  features = genes, 
-                  size = 0.5,
-                  combine = FALSE)
-
-for(i in seq_along(x)) {
-  x[[i]] <- x[[i]] + 
-              guides(color = "none") + 
-              scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) +
-              theme_void() + 
-              theme(plot.title = element_blank(), 
-                    plot.margin = unit(c(0.6, 0.15, 0.6, 0.15), "cm"))
-}
-
-plot_a_list(x,2,5)
-ggsave("./output/Figure7/Figure7C.png", height = 3, width = 7.5, dpi = 600)
-
-```
+#Figure 7B
 
 ```{r}
 spike <- read.csv("./output/spike.clones_overall.csv")
@@ -2216,8 +2129,11 @@ DimPlot(subset.Obj, reduction = "umap", label = TRUE, label.size = 4, raster=FAL
   theme_void() + 
   NoLegend() 
 
-ggsave("./output/Figure7/AG.specific_Figure7A_1.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
+ggsave("./output/Figure7/Figure7B.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
+```
 
+#Figure 7C
+```{r}
 df <- data.frame(subset.Obj[[]], subset.Obj@reductions$umap@cell.embeddings)
 df <- df[df$relative.time == "Late",]
 ggplot(df, aes(x=UMAP_1, y = UMAP_2)) + 
@@ -2228,7 +2144,7 @@ ggplot(df, aes(x=UMAP_1, y = UMAP_2)) +
   guides(color = "none") + 
   theme(plot.title = element_blank(),
         strip.text = element_blank())
-ggsave("./output/Figure7/AG.specific_Figure7C_1.png", height = 7, width = 4, dpi = 600)
+ggsave("./output/Figure7/Figure7C_1.png", height = 7, width = 4, dpi = 600)
 
 
 ggplot(df, aes(x = study, fill = seurat_clusters)) + 
@@ -2237,28 +2153,10 @@ ggplot(df, aes(x = study, fill = seurat_clusters)) +
   theme_classic() + 
   guides(fill = "none") + 
   theme(axis.title = element_blank())
-ggsave("./output/Figure7/AG.specific_Figure7C_2.pdf", height = 3.5, width = 4)
-
-DimPlot(subset.Obj, reduction = "umap", label.size = 4, raster=FALSE, pt.size = 0.25, group.by = "CD4.annot") +
-  scale_color_viridis(option = "H", discrete = TRUE) +  
-  guides(colors = "none", fill = "none") + 
-  theme_void()   +
-  theme(plot.title = element_blank(),
-        strip.text.x = element_blank())
-
-ggsave("./output/Figure7/AG.specific_Figure7A_4.png", height = 3.5, width = 6, dpi = 600, bg = "transparent")
-
-ggplot(df, aes(x = study, fill = CD4.annot)) + 
-  geom_bar(position = "fill") + 
-scale_fill_viridis(option = "H", discrete = TRUE) +  
-  theme_classic() + 
-  theme(axis.title = element_blank())
-ggsave("./output/Figure7/AG.specific_Figure7A_5.pdf", height = 3.5, width = 4)
+ggsave("./output/Figure7/Figure7C_2.pdf", height = 3.5, width = 4)
 ```
 
-
-
-#Figure 7B
+#Figure 7D
 
 ```{r}
 markers <- FindAllMarkers(subset.Obj)
@@ -2272,53 +2170,13 @@ DotPlot(subset.Obj, features = unique(top$gene)) +
   scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
   scale_y_discrete(limits=rev)+ 
   coord_flip()
-ggsave("./output/Figure7/Figure7C.pdf", height = 16, width = 6)
+ggsave("./output/Figure7/Figure7D.pdf", height = 16, width = 6)
 ```
 
-```{r}
-Idents(further.subset.Obj) <- "study"
 
-
-InfvsVac.markers <- FindMarkers(further.subset.Obj, 
-                           ident.1 = "s350",
-                           test.use = "MAST", 
-                           latent.vars = c("donor"), 
-                           logfc.threshold = 0,
-                           min.pct = 0,
-                           pseudocount.use = 0.1)
-
-write.csv(InfvsVac.markers, "./output/Ag.specific.InfvsVac.markers.csv")
-InfvsVac.markers <- InfvsVac.markers %>%
-                mutate(Percent.Delta = pct.1 - pct.2)
-InfvsVac.markers$genes <- rownames(InfvsVac.markers)
-rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
-
-top10 <- InfvsVac.markers %>% 
-  subset(p_val < 0.05) %>%
-  slice_max(order_by = avg_log2FC, n = 10)
-
-bottom10 <- InfvsVac.markers %>% 
-  subset(p_val < 0.05) %>%
-  slice_min(order_by = avg_log2FC, n = 10)
-
-LNvBL.plot <- ggplot(InfvsVac.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
-  geom_point(aes(size = Percent.Delta), color = "grey") + 
-  geom_point(data=subset(InfvsVac.markers, genes %in% top10$genes),
-             aes(size = Percent.Delta), color = rb.palette[1]) + 
-  geom_point(data=subset(InfvsVac.markers, genes %in% bottom10$genes),
-             aes(size = Percent.Delta), color = rb.palette[11]) + 
-  geom_text_repel(data=subset(InfvsVac.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
-  theme_classic() + 
-  scale_size(range = c(0.1,3)) + 
-  geom_hline(yintercept = 1.3) + 
-  geom_vline(xintercept = 0)
-ggsave("./output/Figure7/Figure7F.png", height = 4.5, width = 5, dpi = 600)
-```
-
-Figure 7E
+#Figure 7E
 
 ```{r}
-
 subset.Obj <- clusterTCR(subset.Obj, 
                          group.by = "donor",
                          chain = "TRA", 
@@ -2346,9 +2204,6 @@ ggplot(df, aes(x=UMAP_1, y = UMAP_2)) +
   theme_void()
 ggsave("./output/Figure7/Figure7E_1.png", height = 3.5, width = 4, dpi = 600)  
 
-
-#df <- subset(df, donor != "368-04")
-#df <- subset(df, donor != "368-13")
 ggplot(df, aes(x=UMAP_1, y = UMAP_2)) + 
   geom_point(color = "grey") + 
   geom_point(data = subset(df, !is.na(TRA_cluster)), aes(color = TRA_cluster)) + 
