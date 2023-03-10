@@ -5,11 +5,34 @@ date: '2022-07-11'
 output: html_document
 ---
 
+```{r}
+library(dplyr)
+library(eulerr)
+library(ggseqlogo)
+library(ggplot2)
+library(harmony)
+library(iNEXT)
+library(Matrix)
+library(msa)
+library(mumosa)
+library(Nebulosa)
+library(patchwork)
+library(ProjecTILs)
+library(RColorBrewer)
+library(scRepertoire)
+library(seqinr)
+library(Seurat)
+library(SingleR)
+library(stringdist)
+library(stringr)
+library(Trex)
+```
+
 ###################
 #Processing Data
 #################
 
-General pipeline for the generating intermediate Seurat objects that have been 1) filtered/passe qc and 2) anntoated with multiple packages
+General pipeline for the generating intermediate Seurat objects that have been 1) filtered/passe qc and 2) annotated with multiple packages
 
 ```{r eval=FALSE}
 dir.create("dataExplore")
@@ -17,12 +40,10 @@ dir.create("dataExplore/qc")
 "%!in%" <- Negate("%in%")
 file_list <- list.files("./data/")
 
-library(SingleR)
-library(Matrix)
-library(ProjecTILs)
+
 
 #############################
-#Laoding Annotation Data Sets
+#Loading Annotation Data Sets
 ############################
 
 DICE <- DatabaseImmuneCellExpressionData()
@@ -80,7 +101,7 @@ for (i in seq_along(file_list)){
   s.obj <- quietTCRgenes(s.obj)
   
   #############################################
-  #Projectil Annotation of Cell Types
+  #ProjecTIL Annotation of Cell Types
   #############################################
   
     query.projected <- make.projection(s.obj, ref = ref4, ncores = 1)
@@ -125,12 +146,7 @@ for (i in seq_along(file_list)){
 #Integrate Data
 ###############
 
-```{r}
-library(Seurat)
-library(dplyr)
-library(harmony)
-library(scRepertoire)
-
+```{r, eval = FALSE}
 inventory <- read.delim("./data/data.inventory.txt")
 samples<- inventory$donor
 
@@ -174,13 +190,10 @@ saveRDS(list, file = "./data/processedData/Fullintegrated_seuratObjects.rds")
 #Adding Contig Data
 ###################
 
-```{r}
-library(scRepertoire)
-
+```{r, eval = FALSE}
 ######################################
 #iterate to make a list of contig csvs
 ######################################
-
 
 contig.list <- NULL
 for (i in seq_along(samples)){
@@ -211,11 +224,11 @@ saveRDS(list, file = "./data/processedData/Fullintegrated_seuratObjects.rds")
 
 
 ######################
-#Iolating Only T Cells
+#Isolating Only T Cells
 ######################
 
-```{r}
-#Filtering using the scGate built into PorjecTIL based on T-AB
+```{r, eval=FALSE}
+#Filtering using the scGate built into ProjecTIL based on T-AB
 #Only T cells with contig information
 list$filter  <- "Yes"
 list$filter <- ifelse(!is.na(list$CD8.annot) | !is.na(list$CD4.annot), "No", list$filter)
@@ -291,7 +304,7 @@ list <- AddMetaData(list, Con.df)
 #Adding Known Epitope Sequences Annotation
 ##########################################
 
-```{r}
+```{r, eval = FALSE}
 #Spike 167-180 epitope
 sequence <- read.csv("./sequenceInfo/Sequences.csv")
 CTaa <- as.data.frame(stringr::str_split(list$CTaa, "_", simplify = TRUE))
@@ -369,6 +382,7 @@ list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 
 # Figure 1C
 ```{r}
+mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(list$seurat_clusters)))
 DimPlot(list, label = TRUE, raster=FALSE, pt.size = 0.5, repel = TRUE) + 
   theme_void() + 
   scale_color_manual(values = mycolors) 
@@ -379,7 +393,7 @@ ggsave("./output/Figure1/Figure1C.pdf")
 # Figure 1D
 ```{r}
 source("./R/utils.R")
-library(Nebulosa)
+
 
 genes <- c("CD4", "CD8A", "CCR7", "SELL", "CXCR5", "ICOS", "FOXP3", "IL2RA", "CTLA4", "PDCD1")
 
@@ -472,9 +486,6 @@ ggsave("./output/Figure1/Figure1G.png", height = 6, width = 7, dpi = 600, bg = "
 
 #Figure 1H
 ```{r}
-library(ggseqlogo)
-library(msa)
-
 meta <- list[[]]
 meta <- meta[!is.na(meta$TCRB.S167.180) |!is.na(meta$TCRA.S167.180),] 
 TRB <- unique(str_split(meta$CTaa, "_", simplify = TRUE)[,2])
@@ -574,10 +585,6 @@ saveRDS(tfh, "./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds"
 #Figure 2A
 ```{r}
 tfh <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
-library(RColorBrewer)
-library(ggplot2)
-library(Seurat)
-library(dplyr)
 mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(tfh$seurat_clusters)))
 
 update_geom_defaults("point", list(stroke = 0.25))
@@ -591,7 +598,7 @@ ggsave("./output/Figure2/Figure2A_TFHonly.pdf", height = 3.5, width = 4, dpi = 6
 ```
 
 ```{r}
-library(patchwork)
+
 plot <- NULL
 features <- sort(c("BCL6", "CXCR5", "CD274", "ICOS", "CCR7","CD40LG","IL21","CXCL13", "IL4", "FOXP3", "IL10", "SELL"))
 for (i in seq_along(features)) {
@@ -624,12 +631,12 @@ ggsave("./output/Figure2/Figure2B_TFHonly.png", height = 5.3, width = 8, dpi = 6
 #Figure 2C
 ```{r}
 markers <- FindAllMarkers(tfh)
-write.csv(markers, "./output/tfh_onlymarkers.csv")
+write.csv(markers, "./output/Figure2/Figure2C_tfh_onlymarkers.csv")
 ```
 
 
 ```{r}
-markers <- read.csv("./output/tfh_onlymarkers.csv")
+markers <- read.csv("./output/Figure2/Figure2C_tfh_onlymarkers.csv")
 
 top <- markers %>%
   group_by(cluster) %>%
@@ -683,8 +690,6 @@ ANOVA.sig.pathways <- sig.results2 %>%
                         rownames()
 
 pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
-
-#pathways.intersect <- pathways.intersect[-51]
 pathways.intersect <- pathways.intersect[-c(3,4,8,41,47,57,62,73,78,80,85,86,90,99,101,120,125,139,141)]
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
 write(pathways.intersect, "output/intersected.pathways.txt")
@@ -1071,9 +1076,7 @@ dir.create("./output/Figure3/")
 ################will need to add the old filter for TCR related Contigs
 
 ```{r}
-library(dplyr)
-library(Trex)
-library(mumosa)
+
 
 list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH.rds")
 cells.to.remove <- unique(c(which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,1]) > 50), #TRA chain > 50 aa
@@ -1142,7 +1145,7 @@ colnames(CTaa.Library)[8:9] <- c("SequencingRun", "Orig.Cluster")
 conga <- AddMetaData(conga, CTaa.Library)
 
 ###################################
-#Adding Test TCR sequence informtion
+#Adding Test TCR sequence information
 #####################################
 
 confirming.seq <- list(TCRA = c("CATGLTGGGNKLTF", "CAGQLNRAAGNKLTF", "CIVPRGTGFQKLVF", "CAVRPNAGNNRKLIW", "CAVTGTYKYIF"), 
@@ -1188,7 +1191,7 @@ conga[["KF.corrected"]] <- CreateDimReducObject(
                                 jackstraw = NULL,
                                 misc = list())
 
-#Calculating Phate embeding
+#Calculating PHATE embedding
 phate.results <- phate(conga[["KF.corrected"]]@cell.embeddings[,1:length(dem.tmp)])
 
 
@@ -1308,7 +1311,6 @@ ggsave("./output/Figure3/Figure3D_TRB.png", height = 4, width = 5, dpi = 600)
 #Figure 3E
 
 ```{r}
-library(seqinr)
 
 clusters <- c(0,1,3)
 conga.meta <- conga[[]]
@@ -1360,8 +1362,7 @@ ggsave("./output/Figure3/Figure3F.png", height = 4, width = 5, dpi = 600)
 #Figure 4 Graphs
 ################
 ```{r cars}
-library(Seurat)
-library(stringdist)
+
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 conga <- annotateDB(conga, chains = "TRB", edit.distance = 0)
 conga <- annotateDB(conga, chains = "TRA", edit.distance = 0)
@@ -1480,7 +1481,7 @@ EvL.markers <- FindMarkers(subset.obj,
                            min.pct = 0,
                            pseudocount.use = 0.1)
 
-write.csv(EvL.markers, "./output/Tfh.DEG.EarlyvsLate.csv")
+write.csv(EvL.markers, "./output/Figure4/Figure4A_Tfh.DEG.EarlyvsLate.csv")
 EvL.markers <- EvL.markers %>%
                 mutate(Percent.Delta = pct.1 - pct.2)
 EvL.markers$genes <- rownames(EvL.markers)
@@ -1518,7 +1519,7 @@ FvL.markers <- FindMarkers(subset.obj,
                            min.pct = 0,
                            pseudocount.use = 0.1)
 
-write.csv(FvL.markers, "./output/Tfh.DEG.d28vsd201.csv")
+write.csv(FvL.markers, "./output/Figure4/Figure4A_Tfh.DEG.d28vsd201.csv")
 
 FvL.markers <- FvL.markers %>%
                 mutate(Percent.Delta = pct.1 - pct.2)
@@ -1585,13 +1586,12 @@ ANOVA.sig.pathways <- sig.results2 %>%
                         rownames()
 
 pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
-old.pathways <- read.csv("./output/int.pathways.csv")
 
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
 pathways.intersect <- pathways.intersect[-which(pathways.intersect %in% c( "BIOCARTA_FIBRINOLYSIS_PATHWAY", "BIOCARTA_AMI_PATHWAY", "BIOCARTA_EXTRINSIC_PATHWAY"))]
 
 
-write(pathways.intersect, "output/Agspecific.intersected.pathways.txt")
+write(pathways.intersect, "output/Figure4/Figure4B_intersected.pathways.txt")
 
 summary <- ES2 %>%
   group_by(timepoint) %>%
@@ -1680,7 +1680,7 @@ for(i in seq_along(duplicated)) {
 
 ```{r}
 dir.create("./output/Figure5")
-library(eulerr)
+
 list <- readRDS("./processedData/Fullintegrated_seuratObjects_Tcells.rds")
 load("Trex.database.rda")
 names(Trex.database) <- c("TRA", "TRB")
@@ -1727,7 +1727,7 @@ meta$EBV.reactive[grepl("EBV",meta$TRB_EPITOPE.SPECIES)] <- "Pos"
 # Figure 5A
 
 ```{r}
-library(iNEXT)
+
 dat.output <- NULL
 subjects <- c("368-01a", "368-13", "368-22")
 count <- 1
@@ -1808,8 +1808,6 @@ for (i in seq_along(subjects)) {
 ## Figure 5C
 
 ```{r}
-library(patchwork)
-library(scRepertoire)
 
 list$compare <- paste0(list$donor, "_", list$tissue)
 plot1 <- scatterClonotype(list, 
@@ -1988,7 +1986,7 @@ LNvB.markers <- FindMarkers(subset.Obj,
                            min.pct = 0,
                            pseudocount.use = 0.1)
 
-write.csv(LNvB.markers, "./output/Ag.specific.LNvsBLcsv")
+write.csv(LNvB.markers, "./output/Figure6/Figure6A_Ag.specific.LNvsBL.csv")
 LNvB.markers <- LNvB.markers %>%
                 mutate(Percent.Delta = pct.1 - pct.2)
 LNvB.markers$genes <- rownames(LNvB.markers)
@@ -2049,10 +2047,9 @@ T.sig.pathways <- sig.results2 %>%
                         rownames()
 
 pathways.intersect <- intersect(W.sig.pathways, T.sig.pathways)
-old.pathways <- read.csv("./output/int.pathways.csv")
 
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
-write(pathways.intersect, "./output/Figure6_Agspecific.intersected.pathways.txt")
+write(pathways.intersect, "./output/Figure6/Figure6B_Agspecific.intersected.pathways.txt")
 
 ES2$timetissue <- paste0(ES2$timepoint, "_", ES2$tissue)
 summary <- ES2 %>%
@@ -2071,12 +2068,7 @@ dev.off()
 #Figure 7 Graphs
 ################
 
-```{r}
-library(Seurat)
-library(dplyr)
-library(harmony)
-library(scRepertoire)
-
+```{r, eval= FALSE}
 inventory <- read.delim("data.inventory.txt")
 inventory <- inventory[inventory$tissue == "PB",]
 samples<- inventory$sample
@@ -2156,8 +2148,6 @@ list <- subset(list, filter != "Yes")
 
 list@meta.data$CD8.pos <- ifelse(list@assays$RNA@data["CD8A",] >=  0.4, "Yes", "No")
 
-dim(list)[2]
-#Check: 198257
 
 list <- list %>%
     Seurat::NormalizeData(verbose = FALSE) %>%
@@ -2177,8 +2167,7 @@ list <- list %>%
 saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
 ```
 
-```{r}
-library(Trex)
+```{r, eval = FALSE}
 list <- annotateDB(list, chains = "TRB", edit.distance = 0)
 list<- annotateDB(list, chains = "TRA", edit.distance = 0)
 
@@ -2255,6 +2244,7 @@ saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds
 #Figure 7B
 
 ```{r}
+list <- readRDS("./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
 spike <- read.csv("./output/spike.clones_overall.csv")
 cells <- unique(c(rownames(list[[]])[which(list$CTaa %in% spike$x)], 
                 rownames(list[[]])[!is.na(list$TCRB.epitope)], 
@@ -2323,7 +2313,7 @@ ggsave("./output/Figure7/Figure7C_2.pdf", height = 3.5, width = 4)
 
 ```{r}
 markers <- FindAllMarkers(subset.Obj)
-write.csv(markers, "./output/AgspecificBlood_markers.csv")
+write.csv(markers, "./output/Figure7/Figure7_AgspecificBlood_markers.csv")
 
 top <- markers %>%
   group_by(cluster) %>%
