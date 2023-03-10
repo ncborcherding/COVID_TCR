@@ -706,9 +706,6 @@ for(i in 2:43) {
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
-#summary <- summary[,-5]
-#summary <- summary[,-9]
-#summary <- summary[,-80]
 
 rownames(summary) <- summary$seurat_clusters
 colnames(summary) <- stringr::str_remove_all(colnames(summary), "_UCell")
@@ -716,73 +713,6 @@ colnames(summary) <- stringr::str_remove_all(colnames(summary), "_UCell")
 pdf("./output/Figure2/GSEA.heatmap.pdf", height = 8, width = 10)
 pheatmap::pheatmap(t(summary[,2:43]))
 dev.off()
-
-
-
-################################
-#Calculating PCA on Enrichment
-###############################
-
-x <- prcomp(ES2[,which(colnames(ES2) %in% pathways.intersect)], center = TRUE, scale. = TRUE)
-eigs <- x$sdev^2
-eigs <- eigs[1:10]
-
-var_explained <- eigs/sum(eigs)
-
-df <- as.data.frame(x$rotation[,1:10])
-df$names <- rownames(df)
-options(ggrepel.max.overlaps = Inf)
-fviz_pca_var(x,
-             col.ind = "cos2", # Color by the quality of representation
-             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-             repel = TRUE ,    # Avoid text overlapping
-             select.var = list(contrib = 60), 
-             labelsize = 2)
-
-ggsave("./output/Figure2/Overall.contribution.pdf", height = 20, width = 20)
-
-fviz_contrib(x, choice = "var", axes = 1, top = 10)
-ggsave("./output/Figure2/PC1_contribution.pdf", height = 7, width = 7)
-
-fviz_contrib(x, choice = "var", axes = 2, top = 10)
-ggsave("./output/Figure2/PC2_contribution.pdf", height = 7, width = 7)
-    
-df %>%
-    ggplot(aes(x=df[,1],y=df[,2])) + 
-    geom_point() + 
-    geom_text(aes_string(label = "names"), 
-            size=2, hjust = 0.5, nudge_y = -0.01) + 
-    geom_hline(yintercept = 0, lty=2) + 
-    geom_vline(xintercept = 0, lty=2) +
-    labs(x=paste0("PC1",": ",round(var_explained[1]*100,1),"%"),
-            y=paste0("PC2", ": ",round(var_explained[2]*100,1),"%")) +
-    theme_classic()
-ggsave("./output/Figure2/Figure2E.1_TFHonly.pdf", height = 7, width = 7)
-    
-df <- data.frame(x$x[,1:30], meta)
-
-ggplot(df) +
-  geom_hline(yintercept = 0, lty = 2) + 
-  geom_vline(xintercept = 0, lty = 2) + 
-  stat_density_2d(aes(x=PC1, y = PC2, fill = stat(level)), 
-                  geom = "polygon", color = "black", lwd = 0.25, bins = 20) + 
-  facet_grid(.~timepoint) + 
-  labs(x=paste0("PC1",": ",round(var_explained[1]*100,1),"%"),
-       y=paste0("PC2", ": ",round(var_explained[2]*100,1),"%")) +
-  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
-  theme_classic() + 
-  guides(fill = "none")
-ggsave("./output/Figure2/Figure2E.2_TFHonly.pdf", height = 2.75, width = 25)
-
-ggplot(ES2, aes(x=seurat_clusters, y = normalize(HALLMARK_TNFA_SIGNALING_VIA_NFKB_UCell))) + 
-  geom_violin(aes(fill = seurat_clusters)) +
-  geom_boxplot(width = 0.25) + 
-  scale_fill_manual(values = mycolors[c(1:5,7:12)]) + 
-  guides(fill = "none") + 
-  theme_classic() + 
-  theme(axis.title = element_blank())
-
-ggsave("./output/Figure2/TNFsignaling.pdf", height = 2.75, width = 4)
 ```
 
 
