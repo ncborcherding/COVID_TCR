@@ -6,6 +6,7 @@ output: html_document
 ---
 
 ```{r}
+library(bluster)
 library(dplyr)
 library(eulerr)
 library(escape)
@@ -13,11 +14,13 @@ library(ggseqlogo)
 library(ggplot2)
 library(harmony)
 library(iNEXT)
+library(leidenAlg)
 library(Matrix)
 library(msa)
 library(mumosa)
 library(Nebulosa)
 library(patchwork)
+library(phateR)
 library(ProjecTILs)
 library(RColorBrewer)
 library(scRepertoire)
@@ -1084,7 +1087,18 @@ conga <- conga %>%
 conga <- Trex::quietTCRgenes(conga)
 conga <- ScaleData(conga, verbose = FALSE) 
 conga <- RunPCA(conga, features = VariableFeatures(conga))
-         
+
+conga <- runTrex(conga, 
+                 chains = "TRA", 
+                 AA.properties = "KF", 
+                 reduction.name = "TRA.KF")
+
+conga <- runTrex(conga, 
+                 chains = "TRB", 
+                 AA.properties = "KF", 
+                 reduction.name = "TRB.KF")
+
+
 dem.tmp <- c(1:dimen, 31:(31+dimen-1), 61:(61+dimen-1))
 
 #Calculating mutual neighbor values
@@ -1141,7 +1155,7 @@ df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
 
 centers = df %>% 
           group_by(leiden.clusters) %>% 
-          summarize(across(c(paste0(dimRed[i], "_1"), paste0(dimRed[i], "_2")),mean)) %>%
+          summarize(across(c("phateTrex_1", "phateTrex_2"),mean)) %>%
           as.data.frame()
         max.cluster.val <- max(as.numeric(na.omit(df$leiden.clusters)))
         df$leiden.clusters <- factor(df$leiden.clusters, levels = c(0:max.cluster.val))
@@ -1157,6 +1171,10 @@ ggplot() +
               color = "black", size = 5) +
     labs(fill = "cluster") + 
     theme(axis.title = element_blank())
+
+###################
+#Need to fix
+#################
 
 ggsave("./output/Figure3/Figure3B.png", height = 4, width = 5.75, dpi = 600)
 ```
@@ -1177,7 +1195,7 @@ for(i in seq_along(x)) {
     guides(color = "none") + 
     theme_void()
 }
-plot_a_list(x,3,2)
+plot_a_list(x,4,2)
 ggsave("./output/Figure3/Figure3C.png", height = 10.67, width = 6.67, dpi = 600)
 ```
 
