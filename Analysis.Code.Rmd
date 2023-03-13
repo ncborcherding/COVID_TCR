@@ -10,8 +10,10 @@ library(bluster)
 library(dplyr)
 library(eulerr)
 library(escape)
+library(ggalluvial)
 library(ggseqlogo)
 library(ggplot2)
+library(ggrepel)
 library(harmony)
 library(iNEXT)
 library(leidenAlg)
@@ -830,11 +832,7 @@ circles <- getCirclize(tfh.201,
 
 
 pdf("./output/Figure2/tfh.d201.pdf", height = 4, width = 4)
-compareClonotypes(tfh.110, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) circlize::chordDiagram(circles,
+circlize::chordDiagram(circles,
                        self.link = 1, 
                        grid.col = grid.cols, 
                        directional = 1,
@@ -844,97 +842,6 @@ dev.off()
 
 ```
 
-```{r}
-meta <- tfh[[]]
-d28 <- compareClonotypes(tfh.28, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8), 
-                  exportTable = TRUE)
-d60 <- compareClonotypes(tfh.60, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8), 
-                  exportTable = TRUE)
-d110 <- compareClonotypes(tfh.110, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8), 
-                  exportTable = TRUE)
-d201 <- compareClonotypes(tfh.201, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8), 
-                  exportTable = TRUE)
-
-shared.clones <- unique(c(names(which(table(as.vector(d28$Clonotypes)) > 1)), 
-                   names(which(table(as.vector(d60$Clonotypes)) > 1)), 
-                   names(which(table(as.vector(d110$Clonotypes)) > 1)), 
-                   names(which(table(as.vector(d201$Clonotypes)) > 1))))
-
-updated.shared.clones <- unique(c("CAASPGGSNYKLTF_CAGRLADTQYF", "CAASKGGGADGLTF_CASSQESLTGRNTEAFF", "CAGATRGGSNYKLTF_CASKPGQGARENGYTF", "CAGQLHKAAGNKLTF_CASLGQGVNGYTF", "CALKSGGSNYKLTF_CASSLKPDTQYF", "CALSPRGSARQLTF_CASSLGDGLNEQFF", "CAMREAPGSRLFF_CSARDLAGVRGNEQFF", "CAVEDLSDYKLSF_CASSYPQGANEQFF", "CAVRGAGSEKLVF_CASSSSGRAVGDTQYF", "CAANTGGFKTIF_CASSYGPTGGGTSTDTQYF", "CAASLAYSGGSNYKLTF_CASSVSQTGYEQYF", "CALSPSHQGGKLIF_CASRSGDRVNTIYF", "CAVGDGLNAGNMLTF_CASSHGVQGAETQYF", "CAVSGDKLIF_CASSLPPVVSGNTIYF", "CVVNRVSSNTGKLIF_CATSDPRVGDNQPQHF", "CAANTGGFKTIF_CASSYGPTGGGTSTDTQYF", "CAAPGGSNYKLTF_CASSIGQSHQPQHF", "CATDAQRGGKLIF_CASSLPEGLAGGAGYTQYF", "CAENNNARLMF_CSATDIKLDTQYF", "CAGMNYGGSQGNLIF_CASSQRGAHGYTF", "CALKSGGSNYKLTF_CASSLKPDTQYF", "CALQRDFNKFYF_CASTLAGSNTGELFF", "CALSPRGSARQLTF_CASSLGDGLNEQFF", "CAPGLTGGGNKLTF_CASSPGGGNQPQHF", "CAVEDLSDYKLSF_CASSYPQGANEQFF", "CAVFSSPGGSEKLVF_CASSSQAQETQYF"))
-                   
-
-clone.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(22)
-names(clone.palette) <- updated.shared.clones
-
-
-
-c1 <- compareClonotypes(tfh.28, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) + 
-  scale_fill_manual(values = clone.palette) 
-
-c2 <- compareClonotypes(tfh.60, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) + 
-  scale_fill_manual(values = clone.palette)
-
-c3 <- compareClonotypes(tfh.110, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8))  + 
-  scale_fill_manual(values = clone.palette)
-
-c4 <- compareClonotypes(tfh.201, 
-                  cloneCall = "CTaa", 
-                  split.by = "seurat_clusters", 
-                  numbers = 10, 
-                  samples = c(3,8)) + 
-  scale_fill_manual(values = clone.palette)
-
-
-
-c1 + c2 + c3 + c4+ plot_layout(guides = "collect", ncol = 4)
-
-#####################################
-#Will need to change Name before pub
-#####################################
-ggsave("./output/Figure2/Figure2F_test.pdf", height = 5, width = 30)
-
-meta <- subset(meta, seurat_clusters %in% c(3,8))
-
-summary <- meta %>%
-            group_by(TCRA.epitope, seurat_clusters, timepoint) %>%
-            dplyr::count() %>%
-            as.data.frame()
-
-summary <- summary %>%
-  group_by(seurat_clusters, timepoint) %>%
-  mutate(total = sum(n))
-
-summary$percent <- round((summary$n/summary$total)*100, 2)
-write.csv(summary, "spike.specific.cluster.csv")
-```
 
 
 #Figure 2F
