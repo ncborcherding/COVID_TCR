@@ -722,13 +722,13 @@ DimPlot(tfh, group.by = "cloneType") +
   scale_color_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(4)[c(1,2,4)]) + 
   theme_void() + 
   theme(plot.title = element_blank())
-ggsave("./output/Figure3/Figure2E.1_TFHonly.pdf", height = 3, width = 6)
+ggsave("./output/Figure2/Figure2E.1_TFHonly.pdf", height = 3, width = 6)
 
 df <- data.frame(tfh@reductions$umap@cell.embeddings, tfh[[]])
 
 y <- df %>%
   group_by(orig.ident, CTaa) %>% 
-  count()
+  dplyr::count()
 
 y <- y %>%
   group_by(orig.ident) %>%
@@ -922,7 +922,7 @@ meta <- subset(meta, seurat_clusters %in% c(3,8))
 
 summary <- meta %>%
             group_by(TCRA.epitope, seurat_clusters, timepoint) %>%
-            count() %>%
+            dplyr::count() %>%
             as.data.frame()
 
 summary <- summary %>%
@@ -970,27 +970,8 @@ df2$spike[which(df2$TCRB.S167.180 == "Specific")] <- "Yes"
 
 x <- df2 %>%
   group_by(timepoint, spike) %>%
-  count()
+  dplyr::count()
 ```
-
-#Figure 2G
-```{r}
-table <- table(sampled$seurat_clusters, sampled$timepoint)
-
-for(x in seq_len(ncol(table))) {
-  table[,x] <- table[,x]/sum(table[,x])
-}
-table <- data.frame(table)
-
-ggplot(table, aes(x=Var1, y = Freq, fill = Var2)) + 
-  geom_bar(stat = "identity", position = "fill") + 
-  scale_fill_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(4)) + 
-  xlab("Clusters") + 
-  ylab("Relative Proportion") + 
-  theme_classic()
-ggsave("./output/Figure3/Figure2G_TFHonly.pdf", height = 3, width = 5)
-```
-
 
 ################
 #Figure 3 Graphs
@@ -1007,8 +988,6 @@ dir.create("./output/Figure3/")
 ################will need to add the old filter for TCR related Contigs
 
 ```{r}
-
-
 list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH.rds")
 cells.to.remove <- unique(c(which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,1]) > 50), #TRA chain > 50 aa
                      which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,2]) > 50))) # TRB chain > 50 aa residues
