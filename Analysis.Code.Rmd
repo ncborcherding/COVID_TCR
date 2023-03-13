@@ -8,6 +8,7 @@ output: html_document
 ```{r}
 library(dplyr)
 library(eulerr)
+library(escape)
 library(ggseqlogo)
 library(ggplot2)
 library(harmony)
