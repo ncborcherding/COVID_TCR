@@ -1516,46 +1516,13 @@ for(i in seq_along(duplicated)) {
 ```{r}
 dir.create("./output/Figure5")
 
-list <- readRDS("./processedData/Fullintegrated_seuratObjects_Tcells.rds")
-load("Trex.database.rda")
-names(Trex.database) <- c("TRA", "TRB")
-
-Trex.database[[1]] <- as.data.frame(Trex.database[[1]])
-names(Trex.database[[1]]) <- c("CDR3", "V.GENE", "D.GENE", "J.GENE", "EPITOPE.SEQ", "EPITOPE.TARGET", "EPITOPE.SPECIES", "MHC.A", "MHC.B", "TISSUE", "CELLTYPE", "PMID", "DB")
-Trex.database[[1]] <- unique(Trex.database[[1]])
-
-Trex.database[[2]] <- as.data.frame(Trex.database[[2]])
-names(Trex.database[[2]]) <- c("CDR3", "V.GENE", "D.GENE", "J.GENE", "EPITOPE.SEQ", "EPITOPE.TARGET", "EPITOPE.SPECIES", "MHC.A", "MHC.B", "TISSUE", "CELLTYPE", "PMID", "DB")      
-Trex.database[[2]] <- unique(Trex.database[[2]])
+list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 
 list <- subset(list, donor %in% c("368-01a", "368-13", "368-22"))
 
 meta <- list[[]]
 meta$TRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
 meta$TRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
-
-
-annotateDB <- function(dat,
-                       chains = "TRB") {
-  relevent.db <- as.data.frame(Trex.database[[chains]])
-  relevent.db <- relevent.db[,c("CDR3", "EPITOPE.TARGET", "EPITOPE.SEQ", "EPITOPE.SPECIES", "TISSUE", "CELLTYPE")]
-  
-  colnames(relevent.db)[2:6] <- paste0(chains, "_", colnames(relevent.db)[2:6])
-  dat <- merge(dat, relevent.db, by.x =chains, by.y = "CDR3", all.x = TRUE)
-}
-
-meta <- annotateDB(meta, chains = "TRA")
-meta <- annotateDB(meta, chains = "TRB")
-
-meta$CMV.reactive <- "Neg"
-meta$CMV.reactive[grepl("CMV",meta$TRA_EPITOPE.SPECIES)] <- "Pos"
-meta$CMV.reactive[grepl("CMV",meta$TRB_EPITOPE.SPECIES)] <- "Pos"
-
-meta$EBV.reactive <- "Neg"
-meta$EBV.reactive[grepl("EBV",meta$TRA_EPITOPE.SPECIES)] <- "Pos"
-meta$EBV.reactive[grepl("EBV",meta$TRB_EPITOPE.SPECIES)] <- "Pos"
-
-
 ```
 
 
@@ -1940,7 +1907,7 @@ list <- list %>%
                  algorithm = 3) %>% 
     identity()
 
-saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects.rds")
+saveRDS(list, file = "./data/processedData/PB_Fullintegrated_seuratObjects.rds")
 
 library(scRepertoire)
 
@@ -1973,7 +1940,7 @@ slot(list, "meta.data")$cloneType <- factor(slot(list, "meta.data")$cloneType,
 
 DimPlot(list, group.by = "cloneType") + scale_color_manual(values = rev(viridis_pal(option = "B")(length(unique(list$cloneType)))))
 
-saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects.rds")
+saveRDS(list, file = "./data/processedData/PB_Fullintegrated_seuratObjects.rds")
 
 list$filter  <- "Yes"
 list$filter <- ifelse(!is.na(list$CD8.annot) | !is.na(list$CD4.annot), "No", list$filter)
@@ -1999,7 +1966,7 @@ list <- list %>%
                  algorithm = 3) %>% 
     identity()
 
-saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
+saveRDS(list, file = "./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
 ```
 
 ```{r, eval = FALSE}
@@ -2071,7 +2038,7 @@ list$TCRA.epitope <- ifelse(!is.na(list$TCRA.VDJ.db) & is.na(list$TCRA.epitope),
 
 list$TCRA.epitope <- ifelse(grepl("Spike", list$TRA_Epitope.target) & is.na(list$TCRA.epitope), "spike", list$TCRA.epitope)
 dir.create("./output/Figure7")
-saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
+saveRDS(list, file = "./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
 
 
 ```
@@ -2079,7 +2046,7 @@ saveRDS(list, file = "./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds
 #Figure 7B
 
 ```{r}
-list <- readRDS("./processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
+list <- readRDS("./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
 spike <- read.csv("./output/spike.clones_overall.csv")
 cells <- unique(c(rownames(list[[]])[which(list$CTaa %in% spike$x)], 
                 rownames(list[[]])[!is.na(list$TCRB.epitope)], 
@@ -2122,6 +2089,8 @@ ggsave("./output/Figure7/Figure7B.png", height = 3.5, width = 4, dpi = 600, bg =
 
 #Figure 7C
 ```{r}
+subset.Obj$study <- "s350"
+subset.Obj$study[grepl("368", subset.Obj$donor)] <- "s368"
 df <- data.frame(subset.Obj[[]], subset.Obj@reductions$umap@cell.embeddings)
 df <- df[df$relative.time == "Late",]
 ggplot(df, aes(x=UMAP_1, y = UMAP_2)) + 
@@ -2224,7 +2193,7 @@ ggsave("./output/Figure7/Figure7F_1.pdf", height = 7, width = 8)
 df <- data.frame(subset.Obj@reductions$umap@cell.embeddings, subset.Obj@meta.data)
 df2 <- df %>%
   group_by(study, seurat_clusters, relative.time) %>%
-  count()
+  dplyr::count()
 df2 <- df2 %>%
   group_by(study, relative.time) %>%
   mutate(sum = sum(n))
@@ -2251,3 +2220,9 @@ ggplot(df2, aes(y=proportion,
 
 ggsave("./output/Figure7/Figure7F_2.pdf", height = 4.5, width = 5)
 ```
+# Conclusions
+
+```{r}
+sessionInfo()
+```
+
