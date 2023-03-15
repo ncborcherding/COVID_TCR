@@ -393,7 +393,7 @@ DimPlot(list, label = TRUE, raster=FALSE, pt.size = 0.5, repel = TRUE) +
   theme_void() + 
   scale_color_manual(values = mycolors) 
 
-ggsave("./output/Figure1/Figure1C.pdf")
+ggsave("./output/Figure1/Figure1C.pdf", height = 4, width = 4.5)
 ```
 
 # Figure 1D
@@ -588,7 +588,7 @@ tfh <- tfh %>%
 saveRDS(tfh, "./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 ```
 
-#Figure 2A
+## Figure 2A
 ```{r}
 tfh <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(tfh$seurat_clusters)))
@@ -603,6 +603,7 @@ DimPlot(tfh, reduction = "umap", label = TRUE, repel = TRUE, label.size = 4, ras
 ggsave("./output/Figure2/Figure2A_TFHonly.pdf", height = 3.5, width = 4, dpi = 600, bg = "transparent")
 ```
 
+## Figure 2B
 ```{r}
 
 plot <- NULL
@@ -634,7 +635,7 @@ plot + plot_layout(nrow = 3)
 ggsave("./output/Figure2/Figure2B_TFHonly.png", height = 5.3, width = 8, dpi = 600, bg = "transparent")
 ```
 
-#Figure 2C
+## Figure 2C
 ```{r}
 markers <- FindAllMarkers(tfh)
 write.csv(markers, "./output/Figure2/Figure2C_tfh_onlymarkers.csv")
@@ -655,7 +656,7 @@ DotPlot(tfh, features = unique(top$gene)) +
 ggsave("./output/Figure2/Figure2C_TFHonly.pdf", height = 20, width = 6)
 ```
 
-#Figure 2D
+## Figure 2D
 ```{r}
 ES <- readRDS("./data/ProcessedData/enrichmentResults.rds")
 
@@ -716,66 +717,13 @@ summary <- as.data.frame(summary)
 rownames(summary) <- summary$seurat_clusters
 colnames(summary) <- stringr::str_remove_all(colnames(summary), "_UCell")
 
-pdf("./output/Figure2/GSEA.heatmap.pdf", height = 8, width = 10)
+pdf("./output/Figure2/Figure2D.pdf", height = 8, width = 10)
 pheatmap::pheatmap(t(summary[,2:43]))
 dev.off()
 ```
 
-
+## Figure 2F
 ```{r}
-DimPlot(tfh, group.by = "cloneType") + 
-  scale_color_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(4)[c(1,2,4)]) + 
-  theme_void() + 
-  theme(plot.title = element_blank())
-ggsave("./output/Figure2/Figure2E.1_TFHonly.pdf", height = 3, width = 6)
-
-df <- data.frame(tfh@reductions$umap@cell.embeddings, tfh[[]])
-
-y <- df %>%
-  group_by(orig.ident, CTaa) %>% 
-  dplyr::count()
-
-y <- y %>%
-  group_by(orig.ident) %>%
-  mutate(sum.n = sum(n))
-
-y$scaled <- y$n/y$sum.n
-
-df$new.merge <- paste0(df$orig.ident, "_", df$CTaa)
-y$new.merge <- paste0(y$orig.ident, "_", y$CTaa)
-
-
-cloneTypes=c(Rare = 1e-4, Small = 0.001, 
-                              Medium = 0.01, Large = 0.1, Hyperexpanded = 1)
-cloneTypes <- c(None = 0, cloneTypes)
-y$cloneType <- NA
-for (x in seq_along(cloneTypes)) { names(cloneTypes)[x] <- 
-        paste0(names(cloneTypes[x]), ' (', cloneTypes[x-1], 
-        ' < X <= ', cloneTypes[x], ')') }
-
-for (i in 2:length(cloneTypes)) { 
-  y$cloneType <- ifelse(y$scaled > cloneTypes[i-1] & y$scaled <= cloneTypes[i], names(cloneTypes[i]), y$cloneType) 
-}
-
-colnames(y)[7] <- "Clone.Rep"
-y <- y[,-c(1:2)]
-df <- merge(df, y, by = "new.merge")
-
-ggplot(df, aes(x= UMAP_1, y = UMAP_2)) + 
-  geom_point(aes(color = Clone.Rep), size = 0.5) + 
-  guides(color = "none") + 
-  scale_color_manual(values = colorRampPalette(brewer.pal(11, "RdYlBu"))(7)[c(1,3,6)]) + 
-  theme_void()
-ggsave("./output/Figure2/Figure2E.1_TFHonly.pdf")
-
-ggplot(df, aes(x= UMAP_1, y = UMAP_2)) + 
-  geom_point(aes(color = sqrt(scaled)), size = 0.5, stroke = 0) + 
-   guides(color = "none") + 
-    scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
-  theme_void()
-ggsave("./output/Figure2/Figure2E.1_TFHonly.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
-
-
 tfh.28 <- subset(tfh, timepoint == "d28")
 
 circles <- getCirclize(tfh.28, 
@@ -789,7 +737,7 @@ names(grid.cols) <- levels(tfh@active.ident)
 
 
 #Graphing the chord diagram
-pdf("./output/Figure2/tfh.d28.pdf", height = 4, width = 4)
+pdf("./output/Figure2/Figure2F_tfh.d28.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
                        grid.col = grid.cols, 
@@ -802,7 +750,7 @@ tfh.60 <- subset(tfh, timepoint == "d60")
 circles <- getCirclize(tfh.60, 
                        group.by = "ident")
 
-pdf("./output/Figure2/tfh.d60.pdf", height = 4, width = 4)
+pdf("./output/Figure2/Figure2F_tfh.d60.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
                        grid.col = grid.cols, 
@@ -815,7 +763,7 @@ tfh.110 <- subset(tfh, timepoint == "d110")
 circles <- getCirclize(tfh.110, 
                        group.by = "ident")
 
-pdf("./output/Figure2/tfh.d110.pdf", height = 4, width = 4)
+pdf("./output/Figure2/Figure2F_tfh.d110.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
                        grid.col = grid.cols, 
@@ -831,7 +779,7 @@ circles <- getCirclize(tfh.201,
                        group.by = "ident")
 
 
-pdf("./output/Figure2/tfh.d201.pdf", height = 4, width = 4)
+pdf("./output/Figure2/Figure2F_tfh.d201.pdf", height = 4, width = 4)
 circlize::chordDiagram(circles,
                        self.link = 1, 
                        grid.col = grid.cols, 
@@ -844,7 +792,8 @@ dev.off()
 
 
 
-#Figure 2F
+## Figure 2G
+
 ```{r}
 sampled <- df %>%
   group_by(timepoint) %>%
@@ -872,15 +821,6 @@ ggplot(sampled, aes(x = UMAP_1, y = UMAP_2)) +
   guides(fill = "none") + 
   theme_classic()
 ggsave("./output/Figure2/Figure2F_TFHonly.pdf", height = 3, width = 10.5)
-
-df2 <- df
-df2$spike <- "No"
-df2$spike[which(df2$TCRA.S167.180 == "Specific")] <- "Yes"
-df2$spike[which(df2$TCRB.S167.180 == "Specific")] <- "Yes"
-
-x <- df2 %>%
-  group_by(timepoint, spike) %>%
-  dplyr::count()
 ```
 
 ################
@@ -1299,50 +1239,11 @@ write.csv(updated.shared.clones, "./output/Spike.Specific.clones.csv")
 dir.create("./output/Figure4")
 ```
 
-Figure 4A
+## Figure 4A
 
 ```{r}
 SeuratObj <- subset(SeuratObj, timepoint != "d110")
 subset.obj <- subset(SeuratObj, CTaa %in% updated.shared.clones)
-subset.obj$timeline <- "Late"
-subset.obj$timeline[subset.obj$timepoint %in% c("d28", "d60")] <- "Early"
-
-Idents(subset.obj) <- "timeline"
-EvL.markers <- FindMarkers(subset.obj, 
-                           ident.1 = "Early",
-                           test.use = "MAST", 
-                           latent.vars = "donor", 
-                           logfc.threshold = 0,
-                           min.pct = 0,
-                           pseudocount.use = 0.1)
-
-write.csv(EvL.markers, "./output/Figure4/Figure4A_Tfh.DEG.EarlyvsLate.csv")
-EvL.markers <- EvL.markers %>%
-                mutate(Percent.Delta = pct.1 - pct.2)
-EvL.markers$genes <- rownames(EvL.markers)
-rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
-
-top10 <- EvL.markers %>% 
-  subset(p_val < 0.05) %>%
-  slice_max(order_by = avg_log2FC, n = 10)
-
-bottom10 <- EvL.markers %>% 
-  subset(p_val < 0.05) %>%
-  slice_min(order_by = avg_log2FC, n = 10)
-
-EvL.plot <- ggplot(EvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
-  geom_point(aes(size = Percent.Delta), color = "grey") + 
-  geom_point(data=subset(EvL.markers, genes %in% top10$genes),
-             aes(size = Percent.Delta), color = rb.palette[1]) + 
-  geom_point(data=subset(EvL.markers, genes %in% bottom10$genes),
-             aes(size = Percent.Delta), color = rb.palette[11]) + 
-  geom_text_repel(data=subset(EvL.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
-  theme_classic() + 
-  scale_size(range = c(0.1,3)) + 
-  geom_hline(yintercept = 1.3) + 
-  geom_vline(xintercept = 0)
-
-
 
 Idents(subset.obj) <- "timepoint"
 FvL.markers <- FindMarkers(subset.obj, 
@@ -1380,11 +1281,12 @@ FvL.plot <- ggplot(FvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) +
   geom_hline(yintercept = 1.3) + 
   geom_vline(xintercept = 0)
 
-EvL.plot + FvL.plot
-ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 10, dpi = 600)
+FvL.plot
+ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 5, dpi = 600)
 
 ```
 
+## Figure 5B
 ```{r}
 ES <- readRDS("./data/processedData/enrichmentResults.rds")
 meta <- subset.obj[[]]
@@ -1450,7 +1352,7 @@ pheatmap::pheatmap(t(summary[,2:74]), scale = "row")
 dev.off()
 ```
 
-Figure 4C 
+## Figure 4C 
 ```{r}
 "%!in%" <- Negate("%in%")
 
@@ -1589,7 +1491,7 @@ for(i in seq_along(subjects)) {
 colnames(dat.output) <- c("subjects", "TRA.intersect", "TRA.union", "TRA.blood", "TRA.LN", 
                           "TRB.intersect", "TRB.union", "TRB.blood", "TRB.LN",
                           "combined.intersect", "combined.union", "combined.blood", "combined.LN")
-write.csv(dat.output, "TCRsummary.csv")
+write.csv(dat.output, "./output/Figure5/Figure5_TCRsummary.csv")
 
 chain.combo <- c("TRA", "TRB", "combined") 
 for (i in seq_along(subjects)) {
@@ -1600,7 +1502,7 @@ for (i in seq_along(subjects)) {
     venn.plot <- plot(fit, 
          quantities = TRUE,
          labels = list(font = 4))
-    pdf(paste0("./output/Figure4/Figure5B_", subjects[i], ".", chain.combo[j], "_allTCRs.pdf"), height = 3, width = 3.5)
+    pdf(paste0("./output/Figure5/Figure5B_", subjects[i], ".", chain.combo[j], "_allTCRs.pdf"), height = 3, width = 3.5)
       print(venn.plot)
     dev.off()
   }
@@ -1691,8 +1593,6 @@ for(i in seq_along(additions.TCRB)) {
   seuratObj@meta.data$confirmation.neighbors.TCRB[additions.TCRB[[i]][idx.B]] <- paste0("TCR.", i)
 }
 
-
-
 #Spike 167-180 epitope
 sequence <- read.csv("./sequenceInfo/Sequences.csv")
 CTaa <- as.data.frame(stringr::str_split(seuratObj$CTaa, "_", simplify = TRUE))
@@ -1704,7 +1604,6 @@ seuratObj$TCRB.S167.180[TB] <- "Specific"
 
 seuratObj$TCRA.S167.180 <- NA
 seuratObj$TCRA.S167.180[TA] <- "Specific"
-
 
 #Spike 815-830 epitope
 
@@ -1742,7 +1641,6 @@ for (i in seq_along(epitope)) {
   seuratObj$TCRB.VDJ.db[TB.loc] <- epitope[i]
   seuratObj$TCRA.VDJ.db[TA.loc] <- epitope[i]
 }
-
 
 seuratObj$TCRB.epitope  <- NA
 seuratObj$TCRB.epitope <- ifelse(!is.na(seuratObj$TCRB.S167.180), "S167.180", NA)
