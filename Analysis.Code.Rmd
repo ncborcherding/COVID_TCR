@@ -1235,8 +1235,7 @@ TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
 SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 
 updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
-write.csv(updated.shared.clones, "./output/Spike.Specific.clones.csv")
-dir.create("./output/Figure4")
+write.csv(updated.shared.clones, "./output/Figure4/Figure4_spike.clones")
 ```
 
 ## Figure 4A
@@ -1542,6 +1541,7 @@ ggsave("./output/Figure5/Figure5C.pdf", height = 8, width = 4)
 #################
 
 ```{r}
+dir.create("./output/Figure6")
 seuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 seuratObj <- annotateDB(seuratObj, chains = "TRB", edit.distance = 0)
 seuratObj <- annotateDB(seuratObj, chains = "TRA", edit.distance = 0)
@@ -1558,9 +1558,6 @@ confirm.TCRB.gene <- as.vector(meta$TRBV)
 confirm.TCRA <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,1]
 confirm.TCRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
 edit.distance <- 2
-
-write.csv(confirm.TCRA, "./output/TCRA.confirm.csv")
-write.csv(confirm.TCRB, "./output/TCRB.confirm.csv")
 
 TCRA <- stringr::str_split(seuratObj[[]]$CTaa, "_", simplify = TRUE)[,1]
 TCRB <- stringr::str_split(seuratObj[[]]$CTaa, "_", simplify = TRUE)[,2]
@@ -1666,12 +1663,11 @@ seuratObj$TCRB.COVID[!is.na(seuratObj$confirmation.neighbors.TCRB)] <- "Yes"
 TCRB.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRB.COVID)
 TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
 
-overall.spike.specific.tcells <- write.csv(unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)), "./output/spike.clones_overall.csv")
+write.csv(unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)), "./output/Figure6/Figure6_spike.clones.csv")
 
 subset.Obj <- subset(seuratObj, CTaa %in% unique(c(TCRA.ref$CTaa, TCRB.ref$CTaa)))
 subset.Obj <- subset(subset.Obj, CD8.pos == "No")
-#subset.Obj <- subset(subset.Obj, timepoint != "d110")
-dir.create("./output/Figure6")
+
 ```
 
 # Figure 6A
