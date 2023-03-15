@@ -1,3 +1,0 @@
-To Do List for Trex manuscript:
-* Add TCR candidate visualization somewhere in the comparison of TCR candidates
-* Generate Neighborhoods based on TCRdist and Trex (subtract neighbors with > 1 or 2 edit distances)

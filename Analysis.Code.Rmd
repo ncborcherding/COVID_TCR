@@ -893,9 +893,9 @@ for(i in seq_along(CTaa.unique)) {
     CTaa.Library <- rbind(CTaa.Library, CTaa.tmp)
   }
 }
-write.csv(CTaa.Library, "CTaa.tfh.library.csv")
+write.csv(CTaa.Library, "./output/CTaa.tfh.library.csv")
 
-CTaa.Library <- read.csv("CTaa.tfh.library.csv")
+CTaa.Library <- read.csv("./output/CTaa.tfh.library.csv")
 CTaa.Library <- CTaa.Library[,-1]
 aa <- CTaa.Library$CTaa
 CTaa.Library <- CTaa.Library[,-1]
