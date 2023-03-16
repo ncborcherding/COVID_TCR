@@ -721,6 +721,51 @@ pdf("./output/Figure2/Figure2D.pdf", height = 8, width = 10)
 pheatmap::pheatmap(t(summary[,2:43]))
 dev.off()
 ```
+## Figure 2E
+
+```{r}
+summary <- ES2 %>%
+  group_by(seurat_clusters, timepoint) %>%
+  summarise(across(pathways.intersect, median))
+
+for(i in 3:44) {
+  summary[,i] <- normalize(summary[,i])
+}
+summary <- as.data.frame(summary)
+
+colnames(summary) <- stringr::str_remove_all(colnames(summary), "_UCell")
+
+
+melt.summary <- reshape2::melt(summary, id.vars = c("seurat_clusters", "timepoint"))
+
+melt.summary$timepoint <- factor(melt.summary$timepoint, levels = c("d28", "d60", "d110", "d201"))
+
+means <- melt.summary %>%
+  group_by(variable) %>%
+  summarise(mean = mean(value))
+
+means <- means[order(means$mean),]
+pathways <- rev(means$variable)
+
+
+melt.summary$order <- NA
+for(i in seq_along(pathways)) {
+  melt.summary$order[which(melt.summary$variable == pathways[i])] <- i
+}
+
+
+ggplot(melt.summary, aes(x=timepoint, y = value)) + 
+  geom_line(aes(color = order, group = interaction(variable, seurat_clusters)), lwd = 0.25) + 
+  geom_point(aes(group = interaction(variable, seurat_clusters)), size = 0.5)+ 
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1, aes(group = seurat_clusters)) + 
+  facet_wrap(.~seurat_clusters, ncol = 3) + 
+  scale_color_gradientn(colors = rev(brewer.pal(11, "RdYlBu"))) + 
+  guides(color = "none") + 
+  theme_classic() + 
+  theme(axis.title = element_blank())
+ggsave("./output/Figure2/Figure2E.pdf", height = 8, width = 10)
+
+```
 
 ## Figure 2F
 ```{r}
