@@ -1027,13 +1027,7 @@ conga <- FindNeighbors(conga,
                          force.recalc = TRUE,
                          graph.name = c("T_nn", "T_snn"))
 
-#Calculating Clusters
-nn <- makeKNNGraph(conga@reductions$KF.corrected@cell.embeddings,
-                                               k=20)
-leiden.clusters <- leiden.community(nn, resolution = 0.7, n.iterations = 5)
-
-conga$leiden.clusters <- leiden.clusters$membership
-        
+conga <- FindClusters(conga, algorithm = 3, graph.name = "T_snn", resolution = 0.3)
 
 saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 ```
@@ -1046,27 +1040,24 @@ df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
                   conga[[]])
 
 centers = df %>% 
-          group_by(leiden.clusters) %>% 
+          group_by(seurat_clusters) %>% 
           summarize(across(c("phateTrex_1", "phateTrex_2"),mean)) %>%
           as.data.frame()
-        max.cluster.val <- max(as.numeric(na.omit(df$leiden.clusters)))
-        df$leiden.clusters <- factor(df$leiden.clusters, levels = c(0:max.cluster.val))
 
-mycolors <- colorRampPalette(brewer.pal(12,"Paired"))(length(unique(df$leiden.clusters)))
+max.cluster.val <- max(as.numeric(na.omit(df$seurat_clusters)))
+df$leiden.clusters <- factor(df$leiden.clusters, levels = c(0:max.cluster.val))
+
+mycolors <- colorRampPalette(brewer.pal(12,"Paired"))(length(unique(df$seurat_clusters)))
 
 ggplot() +
-    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = leiden.clusters), 
+    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = seurat_clusters), 
                shape =21, stroke = 0.1) + 
     scale_fill_manual(values = mycolors) + 
     theme_classic() +
-    geom_text(data = centers, mapping =  aes(x=centers[,2], y = centers[,3], label = leiden.clusters), 
+    geom_text(data = centers, mapping =  aes(x=centers[,2], y = centers[,3], label = seurat_clusters), 
               color = "black", size = 5) +
     labs(fill = "cluster") + 
     theme(axis.title = element_blank())
-
-###################
-#Need to fix
-#################
 
 ggsave("./output/Figure3/Figure3B.png", height = 4, width = 5.75, dpi = 600)
 ```
@@ -1132,10 +1123,10 @@ ggsave("./output/Figure3/Figure3D_TRB.png", height = 4, width = 5, dpi = 600)
 
 ```{r}
 
-clusters <- c(0,1,3)
+clusters <- c(0,1,2)
 conga.meta <- conga[[]]
 for(i in seq_along(clusters)) {
-  tmp.meta <- conga.meta[conga.meta$leiden.clusters == clusters[i],]
+  tmp.meta <- conga.meta[conga.meta$seurat_clusters == clusters[i],]
   tmp.meta <- tmp.meta[!is.na(tmp.meta$TCRB.epitope) |!is.na(tmp.meta$TCRA.epitope),] 
   TRB <- str_split(tmp.meta$CTaa, "_", simplify = TRUE)[,2]
   TRA <- str_split(tmp.meta$CTaa, "_", simplify = TRUE)[,1]
