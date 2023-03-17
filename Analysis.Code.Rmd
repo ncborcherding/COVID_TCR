@@ -1,42 +1,58 @@
 ---
-title: "Analysis Pipeline"
-author: "Nicholas Borcherding"
-date: '2022-07-11'
-output: html_document
+title: Analysis of Tfh response in context of mRNA vaccination.
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "March 17, 2023"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+vignette: >
+  %\VignetteEngine{knitr::knitr}
+  %\VignetteIndexEntry{Using scRepetoire}
+  %\usepackage[UTF-8]{inputenc}
 ---
 
-```{r}
-library(bluster)
-library(dplyr)
-library(eulerr)
-library(escape)
-library(ggalluvial)
-library(ggseqlogo)
-library(ggplot2)
-library(ggrepel)
-library(harmony)
-library(iNEXT)
-library(leidenAlg)
-library(Matrix)
-library(msa)
-library(mumosa)
-library(Nebulosa)
-library(patchwork)
-library(phateR)
-library(ProjecTILs)
-library(RColorBrewer)
-library(scRepertoire)
-library(seqinr)
-library(Seurat)
-library(SingleR)
-library(stringdist)
-library(stringr)
-library(Trex)
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
 ```
 
-###################
-#Processing Data
-#################
+# Loading Libraries
+
+```{r}
+suppressPackageStartupMessages({
+      library(bluster)
+      library(dplyr)
+      library(eulerr)
+      library(escape)
+      library(ggalluvial)
+      library(ggseqlogo)
+      library(ggplot2)
+      library(ggrepel)
+      library(harmony)
+      library(iNEXT)
+      library(leidenAlg)
+      library(Matrix)
+      library(msa)
+      library(mumosa)
+      library(Nebulosa)
+      library(patchwork)
+      library(phateR)
+      library(ProjecTILs)
+      library(RColorBrewer)
+      library(scRepertoire)
+      library(seqinr)
+      library(Seurat)
+      library(SingleR)
+      library(stringdist)
+      library(stringr)
+      library(Trex)
+})
+```
+
+# Processing Data
 
 General pipeline for the generating intermediate Seurat objects that have been 1) filtered/passe qc and 2) annotated with multiple packages
 
@@ -148,9 +164,9 @@ for (i in seq_along(file_list)){
 }
 ```
 
-###############
-#Integrate Data
-###############
+
+## Integrating Data
+
 
 ```{r, eval = FALSE}
 inventory <- read.delim("./data/data.inventory.txt")
@@ -192,9 +208,9 @@ list <- list %>%
 saveRDS(list, file = "./data/processedData/Fullintegrated_seuratObjects.rds")
 ```
 
-###################
-#Adding Contig Data
-###################
+
+## Adding Contig Data
+
 
 ```{r, eval = FALSE}
 ######################################
@@ -228,10 +244,7 @@ DimPlot(list, group.by = "cloneType") + scale_color_manual(values = rev(viridis_
 saveRDS(list, file = "./data/processedData/Fullintegrated_seuratObjects.rds")
 ```
 
-
-######################
-#Isolating Only T Cells
-######################
+## Isolating Only T Cells
 
 ```{r, eval=FALSE}
 #Filtering using the scGate built into ProjecTIL based on T-AB
@@ -306,9 +319,7 @@ for (x in seq_along(cloneTypes)) { names(cloneTypes)[x] <-
 list <- AddMetaData(list, Con.df)
 ```
 
-#########################################
-#Adding Known Epitope Sequences Annotation
-##########################################
+## Adding Known Epitope Sequences Annotation
 
 ```{r, eval = FALSE}
 #Spike 167-180 epitope
@@ -375,10 +386,7 @@ list$TCRA.epitope <- ifelse(!is.na(list$TCRA.VDJ.db) & is.na(list$TCRA.epitope),
 saveRDS(list, file = "./processedData/Fullintegrated_seuratObjects_Tcells.rds")
 ```
 
-
-###################
-#Figure 1 Graphs
-###################
+# Figure 1 Graphs
 
 ```{r}
 dir.create("./output/Figure1/")
@@ -386,7 +394,7 @@ list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 ```
 
 
-# Figure 1C
+## Figure 1C
 ```{r}
 mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(list$seurat_clusters)))
 DimPlot(list, label = TRUE, raster=FALSE, pt.size = 0.5, repel = TRUE) + 
@@ -396,7 +404,7 @@ DimPlot(list, label = TRUE, raster=FALSE, pt.size = 0.5, repel = TRUE) +
 ggsave("./output/Figure1/Figure1C.pdf", height = 4, width = 4.5)
 ```
 
-# Figure 1D
+## Figure 1D
 ```{r}
 source("./R/utils.R")
 
@@ -420,8 +428,8 @@ for(i in seq_along(x)) {
 plot_a_list(x,5,2)
 ggsave("./output/Figure1/Figure1D.pdf", height = 5, width = 2)
 ```
+# Figure 1E
 
-#Figure 1E
 ```{r}
 df <- data.frame(list@reductions$umap@cell.embeddings, list@meta.data)
 
@@ -446,7 +454,8 @@ ggplot() +
 ggsave("./output/Figure1/Figure1E.png", height = 6, width = 28, dpi = 600, bg = "transparent")
 ```
 
-#Figure 1F
+## Figure 1F
+
 ```{r}
 sampled <- df %>%
   group_by(tissue) %>%
@@ -470,7 +479,8 @@ ggplot() +
 ggsave("./output/Figure1/Figure1F.png", height = 6, width = 14, dpi = 600, bg = "transparent")
 ```
 
-#Figure 1G
+## Figure 1G
+
 ```{r}
 #Sorting epitopes into either 167-180 or other
 other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
@@ -490,7 +500,8 @@ ggplot() +
 ggsave("./output/Figure1/Figure1G.png", height = 6, width = 7, dpi = 600, bg = "transparent")
 ```
 
-#Figure 1H
+## Figure 1H
+
 ```{r}
 meta <- list[[]]
 meta <- meta[!is.na(meta$TCRB.S167.180) |!is.na(meta$TCRA.S167.180),] 
@@ -551,23 +562,17 @@ meta <- meta[!is.na(meta$TCRA.epitope) & is.na(meta$TCRA.S167.180) |!is.na(meta$
   ggsave(paste0("./output/Figure1/Figure1H.Other.TRB.pdf"), height =3, width = 4.5)
 ```
 
-##################
-#Figure 2 Graphs
-##################
+
+# Figure 2 Graphs
+
 
 ```{r}
 dir.create("./output/Figure2/")
-```
 
-```{r}
 list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_Tcells.rds")
 
 tfh <- subset(list, tissue == "LN" & CD4.annot %in% c("Tfh_Memory", "Tfh_Effector"))
-```
 
-
-
-```{r}
 DefaultAssay(tfh) <- "RNA"
 
 tfh <- tfh %>%
@@ -868,21 +873,14 @@ ggplot(sampled, aes(x = UMAP_1, y = UMAP_2)) +
 ggsave("./output/Figure2/Figure2F_TFHonly.pdf", height = 3, width = 10.5)
 ```
 
-################
-#Figure 3 Graphs
-################
+
+# Figure 3 Graphs
+
+## Loading and Filtering Data
 
 ```{r}
 dir.create("./output/Figure3/")
-```
 
-
-# Loading and Filtering Data
-
-
-################will need to add the old filter for TCR related Contigs
-
-```{r}
 list <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH.rds")
 cells.to.remove <- unique(c(which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,1]) > 50), #TRA chain > 50 aa
                      which(nchar(stringr::str_split(list$CTaa, "_", simplify = TRUE)[,2]) > 50))) # TRB chain > 50 aa residues
@@ -1033,7 +1031,7 @@ saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 ```
 
 
-#Figure 3B
+## Figure 3B
 ```{r}
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
@@ -1045,7 +1043,6 @@ centers = df %>%
           as.data.frame()
 
 max.cluster.val <- max(as.numeric(na.omit(df$seurat_clusters)))
-df$leiden.clusters <- factor(df$leiden.clusters, levels = c(0:max.cluster.val))
 
 mycolors <- colorRampPalette(brewer.pal(12,"Paired"))(length(unique(df$seurat_clusters)))
 
@@ -1062,7 +1059,7 @@ ggplot() +
 ggsave("./output/Figure3/Figure3B.png", height = 4, width = 5.75, dpi = 600)
 ```
 
-#Figure 3C
+## Figure 3C
 ```{r}
 x.features <- c("BCL6", "CXCL13", "CXCR5", "ICOS", "MAF", "PDCD1", "EMP3", "KLF2")
 x <- FeaturePlot(conga, 
@@ -1082,7 +1079,7 @@ plot_a_list(x,4,2)
 ggsave("./output/Figure3/Figure3C.png", height = 10.67, width = 6.67, dpi = 600)
 ```
 
-#Figure 3D
+## Figure 3D
 ```{r}
 epitope <- stringr::str_sort(na.omit(unique(df$TCRA.epitope)), numeric = TRUE)
         
@@ -1119,7 +1116,7 @@ ggplot() +
 ggsave("./output/Figure3/Figure3D_TRB.png", height = 4, width = 5, dpi = 600)
 ```
 
-#Figure 3E
+## Figure 3E
 
 ```{r}
 
@@ -1153,7 +1150,7 @@ for(i in seq_along(clusters)) {
 ```
 
 
-#Figure 3F
+## Figure 3F
 ```{r}
 df.sub <- subset(df, !is.na(confirmation.seq))
 
@@ -1169,9 +1166,8 @@ ggplot() +
 ggsave("./output/Figure3/Figure3F.png", height = 4, width = 5, dpi = 600)
 ```
 
-################
-#Figure 4 Graphs
-################
+# Figure 4 Graphs
+
 ```{r cars}
 
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
@@ -1245,10 +1241,7 @@ ggplot() +
 #ggsave("added_edit.distance.png", height = 4, width = 5)
 
 saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
-```
 
-# Figure 4
-```{r}
 dir.create("./output/Figure4")
 
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
@@ -1271,7 +1264,7 @@ TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
 SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 
 updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
-write.csv(updated.shared.clones, "./output/Figure4/Figure4_spike.clones")
+write.csv(updated.shared.clones, "./output/Figure4/Figure4_spike.clones.csv")
 ```
 
 ## Figure 4A
@@ -1304,6 +1297,7 @@ bottom10 <- FvL.markers %>%
   subset(p_val < 0.05) %>%
   slice_min(order_by = avg_log2FC, n = 10)
 
+rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
 FvL.plot <- ggplot(FvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) + 
   geom_point(aes(size = Percent.Delta), color = "grey") + 
   geom_point(data=subset(FvL.markers, genes %in% top10$genes),
@@ -1321,7 +1315,8 @@ ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 5, dpi = 600)
 
 ```
 
-## Figure 5B
+## Figure 4B
+
 ```{r}
 ES <- readRDS("./data/processedData/enrichmentResults.rds")
 meta <- subset.obj[[]]
@@ -1388,6 +1383,7 @@ dev.off()
 ```
 
 ## Figure 4C 
+
 ```{r}
 "%!in%" <- Negate("%in%")
 
@@ -1446,9 +1442,7 @@ for(i in seq_along(duplicated)) {
   ggsave("./output/Figure4/Figure4C.pdf", height = 4, width = 6)
 ```
 
-#################
 # Figure 5 Graphs
-#################
 
 ```{r}
 dir.create("./output/Figure5")
@@ -1463,7 +1457,7 @@ meta$TRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
 ```
 
 
-# Figure 5A
+## Figure 5A
 
 ```{r}
 
@@ -1492,6 +1486,8 @@ out <- iNEXT(dat.output, q=0, datatype="abundance")
 ggiNEXT(out, type=2) 
 ggsave("./output/Figure5/Figure5A.pdf", height = 7, width = 7)
 ```
+
+## Figure 5B
 
 ```{r}
 subjects <- c("368-01a", "368-13", "368-22")
@@ -1572,9 +1568,7 @@ plot1 + plot2 + plot_layout(ncol = 1)
 ggsave("./output/Figure5/Figure5C.pdf", height = 8, width = 4)
 ```
 
-#################
 # Figure 6 Graphs
-#################
 
 ```{r}
 dir.create("./output/Figure6")
@@ -1722,7 +1716,7 @@ write.csv(LNvB.markers, "./output/Figure6/Figure6A_Ag.specific.LNvsBL.csv")
 LNvB.markers <- LNvB.markers %>%
                 mutate(Percent.Delta = pct.1 - pct.2)
 LNvB.markers$genes <- rownames(LNvB.markers)
-rb.palette <- colorRampPalette(brewer.pal(11, "RdYlBu"))(11)
+
 
 top10 <- LNvB.markers %>% 
   subset(p_val_adj < 0.05) %>%
@@ -1745,6 +1739,8 @@ LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
   geom_vline(xintercept = 0)
 ggsave("./output/Figure6/Figure6A.pdf", height = 4.5, width = 5, dpi = 600)
 ```
+
+## Figure 6B
 
 ```{r}
 meta <- subset.Obj[[]]
@@ -1796,9 +1792,7 @@ pheatmap::pheatmap(t(summary[,2:48]), scale = "row")
 dev.off()
 ```
 
-#################
-#Figure 7 Graphs
-################
+# Figure 7 Graphs
 
 ```{r, eval= FALSE}
 inventory <- read.delim("data.inventory.txt")
@@ -1897,9 +1891,7 @@ list <- list %>%
     identity()
 
 saveRDS(list, file = "./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
-```
 
-```{r, eval = FALSE}
 list <- annotateDB(list, chains = "TRB", edit.distance = 0)
 list<- annotateDB(list, chains = "TRA", edit.distance = 0)
 
@@ -1969,15 +1961,13 @@ list$TCRA.epitope <- ifelse(!is.na(list$TCRA.VDJ.db) & is.na(list$TCRA.epitope),
 list$TCRA.epitope <- ifelse(grepl("Spike", list$TRA_Epitope.target) & is.na(list$TCRA.epitope), "spike", list$TCRA.epitope)
 dir.create("./output/Figure7")
 saveRDS(list, file = "./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
-
-
 ```
 
-#Figure 7B
+## Figure 7B
 
 ```{r}
 list <- readRDS("./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
-spike <- read.csv("./output/spike.clones_overall.csv")
+spike <- read.csv("./output/Figure4/Figure4_spike.clones.csv")
 cells <- unique(c(rownames(list[[]])[which(list$CTaa %in% spike$x)], 
                 rownames(list[[]])[!is.na(list$TCRB.epitope)], 
                 rownames(list[[]])[!is.na(list$TCRA.epitope)]))
@@ -2017,7 +2007,8 @@ DimPlot(subset.Obj, reduction = "umap", label = TRUE, label.size = 4, raster=FAL
 ggsave("./output/Figure7/Figure7B.png", height = 3.5, width = 4, dpi = 600, bg = "transparent")
 ```
 
-#Figure 7C
+## Figure 7C
+
 ```{r}
 subset.Obj$study <- "s350"
 subset.Obj$study[grepl("368", subset.Obj$donor)] <- "s368"
@@ -2043,7 +2034,7 @@ ggplot(df, aes(x = study, fill = seurat_clusters)) +
 ggsave("./output/Figure7/Figure7C_2.pdf", height = 3.5, width = 4)
 ```
 
-#Figure 7D
+## Figure 7D
 
 ```{r}
 markers <- FindAllMarkers(subset.Obj)
@@ -2061,7 +2052,7 @@ ggsave("./output/Figure7/Figure7D.pdf", height = 16, width = 6)
 ```
 
 
-#Figure 7E
+## Figure 7E
 
 ```{r}
 subset.Obj <- clusterTCR(subset.Obj, 
@@ -2104,7 +2095,7 @@ ggsave("./output/Figure7/Figure7E_2.pdf", height = 3.5, width = 10)
 ```
 
 
-Figure 7F
+## Figure 7F
 
 ```{r}
 mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(subset.Obj$seurat_clusters)))
@@ -2150,6 +2141,7 @@ ggplot(df2, aes(y=proportion,
 
 ggsave("./output/Figure7/Figure7F_2.pdf", height = 4.5, width = 5)
 ```
+
 # Conclusions
 
 ```{r}
