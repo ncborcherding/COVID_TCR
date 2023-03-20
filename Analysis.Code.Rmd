@@ -659,15 +659,11 @@ ggsave("./output/Figure2/Figure2B_TFHonly.png", height = 5.3, width = 8, dpi = 6
 
 ## Figure 2C
 
+Finding and displaying the general markers for Tfh clusters.
 
 ```{r}
 markers <- FindAllMarkers(tfh)
 write.csv(markers, "./output/Figure2/Figure2C_tfh_onlymarkers.csv")
-```
-
-
-```{r}
-markers <- read.csv("./output/Figure2/Figure2C_tfh_onlymarkers.csv")
 
 top <- markers %>%
   group_by(cluster) %>%
@@ -681,6 +677,9 @@ ggsave("./output/Figure2/Figure2C_TFHonly.pdf", height = 20, width = 6)
 ```
 
 ## Figure 2D
+
+Identifying and visualizing gene set enirchments for Tfh cells/clusters.
+
 ```{r}
 ES <- readRDS("./data/ProcessedData/enrichmentResults.rds")
 
@@ -696,7 +695,6 @@ meta <- meta[which(!is.na(meta[,"enrichment.groupings"])),]
 
 ES2 <- ES[rownames(ES) %in% rownames(meta),]
 variances <- apply(ES2, 2, var)
-#ES2 <- ES2[,-which(variances == 0)]
 
 pathways <- colnames(ES2)
 
@@ -723,7 +721,7 @@ ANOVA.sig.pathways <- sig.results2 %>%
 pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
 pathways.intersect <- pathways.intersect[-c(3,4,8,41,47,57,62,73,78,80,85,86,90,99,101,120,125,139,141)]
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
-write(pathways.intersect, "output/intersected.pathways.txt")
+write(pathways.intersect, "output/Figure2/Figure2_intersected.pathways.txt")
 
 summary <- ES2 %>%
   group_by(seurat_clusters) %>%
