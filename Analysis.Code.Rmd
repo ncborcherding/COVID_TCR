@@ -405,6 +405,9 @@ ggsave("./output/Figure1/Figure1C.pdf", height = 4, width = 4.5)
 ```
 
 ## Figure 1D
+
+Examining the general markers of T cell subtypes: 
+
 ```{r}
 source("./R/utils.R")
 
@@ -429,6 +432,8 @@ plot_a_list(x,5,2)
 ggsave("./output/Figure1/Figure1D.pdf", height = 5, width = 2)
 ```
 # Figure 1E
+
+Looking at the relative density of cells by timepoint. In order to ensure a unbiased comparison, we randomly downsample cells to compare equal number of cells. 
 
 ```{r}
 df <- data.frame(list@reductions$umap@cell.embeddings, list@meta.data)
@@ -456,6 +461,8 @@ ggsave("./output/Figure1/Figure1E.png", height = 6, width = 28, dpi = 600, bg = 
 
 ## Figure 1F
 
+Looking at the relative density of cells by tissue. In order to ensure a unbiased comparison, we randomly downsample cells to compare equal number of cells. 
+
 ```{r}
 sampled <- df %>%
   group_by(tissue) %>%
@@ -481,6 +488,8 @@ ggsave("./output/Figure1/Figure1F.png", height = 6, width = 14, dpi = 600, bg = 
 
 ## Figure 1G
 
+Looking at the distribution of spike-specific and other COVID19-specific TCRs based on prior experiments. 
+
 ```{r}
 #Sorting epitopes into either 167-180 or other
 other <- c("S356.371" ,"S164.179","S815.830", "S800.815", "S356.371", "S657.671","S1101.1115")
@@ -501,6 +510,8 @@ ggsave("./output/Figure1/Figure1G.png", height = 6, width = 7, dpi = 600, bg = "
 ```
 
 ## Figure 1H
+
+Generating motifs for the antigen-specific TCRs.
 
 ```{r}
 meta <- list[[]]
@@ -565,6 +576,7 @@ meta <- meta[!is.na(meta$TCRA.epitope) & is.na(meta$TCRA.S167.180) |!is.na(meta$
 
 # Figure 2 Graphs
 
+Dimensional reduction on the T follicular helper (Tfh) cells. 
 
 ```{r}
 dir.create("./output/Figure2/")
@@ -594,6 +606,9 @@ saveRDS(tfh, "./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds"
 ```
 
 ## Figure 2A
+
+UMAP of Tfh cells in lymph node and peripheral blood.
+
 ```{r}
 tfh <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(tfh$seurat_clusters)))
@@ -609,8 +624,10 @@ ggsave("./output/Figure2/Figure2A_TFHonly.pdf", height = 3.5, width = 4, dpi = 6
 ```
 
 ## Figure 2B
-```{r}
 
+General markers of Tfh and other T cell effector markers. 
+
+```{r}
 plot <- NULL
 features <- sort(c("BCL6", "CXCR5", "CD274", "ICOS", "CCR7","CD40LG","IL21","CXCL13", "IL4", "FOXP3", "IL10", "SELL"))
 for (i in seq_along(features)) {
@@ -641,6 +658,8 @@ ggsave("./output/Figure2/Figure2B_TFHonly.png", height = 5.3, width = 8, dpi = 6
 ```
 
 ## Figure 2C
+
+
 ```{r}
 markers <- FindAllMarkers(tfh)
 write.csv(markers, "./output/Figure2/Figure2C_tfh_onlymarkers.csv")
@@ -1230,15 +1249,7 @@ df.sub <- subset(df, !is.na(confirmation.seq))
 df.sub2 <- subset(df, !is.na(TCR.both))
 write.csv(df.sub2, "Trex_edit.distance2_matchedVgenes.csv")
 
-ggplot() +
-    geom_point(data =df, aes(x=phateTrex_1, y = phateTrex_2, size = n), 
-               fill = "grey", shape =21, stroke = 0.1) + 
-  geom_point(data =df.sub2, aes(x=phateTrex_1, y = phateTrex_2, size = n, fill = TCR.both), shape =21, stroke = 0.1) + 
-    geom_point(data = df.sub, aes(x=phateTrex_1, y = phateTrex_2, fill = confirmation.seq), 
-               size = 4, shape =21, stroke = 0.2) + 
-    scale_fill_manual(values = brewer.pal(5, "RdYlBu")) +
-    theme_void()
-#ggsave("added_edit.distance.png", height = 4, width = 5)
+
 
 saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 
