@@ -54,7 +54,7 @@ suppressPackageStartupMessages({
 
 # Processing Data
 
-General pipeline for the generating intermediate Seurat objects that have been 1) filtered/passe qc and 2) annotated with multiple packages
+General pipeline for the generating intermediate Seurat objects that have been 1) filtered/passe QC and 2) annotated with multiple packages
 
 ```{r eval=FALSE}
 dir.create("dataExplore")
@@ -182,7 +182,6 @@ list <- merge(list[[1]], list[-1])
 
 data.inventory <- read.delim("./data/data.inventory.txt")
 meta <- list[[]]
-#meta <- meta[,-which(colnames(meta) %in% colnames(data.inventory))]
 barcodes <- rownames(meta)
 meta <- merge(meta, data.inventory, by.x = "orig.ident", by.y = "sample")
 meta <- meta[,colnames(data.inventory)[-2]]
@@ -433,7 +432,7 @@ ggsave("./output/Figure1/Figure1D.pdf", height = 5, width = 2)
 ```
 # Figure 1E
 
-Looking at the relative density of cells by timepoint. In order to ensure a unbiased comparison, we randomly downsample cells to compare equal number of cells. 
+Looking at the relative density of cells by time point. In order to ensure a unbiased comparison, we randomly downsample cells to compare equal number of cells. 
 
 ```{r}
 df <- data.frame(list@reductions$umap@cell.embeddings, list@meta.data)
@@ -678,7 +677,7 @@ ggsave("./output/Figure2/Figure2C_TFHonly.pdf", height = 20, width = 6)
 
 ## Figure 2D
 
-Identifying and visualizing gene set enirchments for Tfh cells/clusters.
+Identifying and visualizing gene set enrichments for Tfh cells/clusters.
 
 ```{r}
 ES <- readRDS("./data/ProcessedData/enrichmentResults.rds")
@@ -745,12 +744,14 @@ dev.off()
 ```
 ## Figure 2E
 
+Examining the changes in gene set enrichment as a function of cluster and time point
+
 ```{r}
 summary <- ES2 %>%
   group_by(seurat_clusters, timepoint) %>%
   summarise(across(pathways.intersect, median))
 
-for(i in 3:44) {
+for(i in 3:44) { #min-max normalizes the gene sets
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
@@ -790,6 +791,8 @@ ggsave("./output/Figure2/Figure2E.pdf", height = 8, width = 10)
 ```
 
 ## Figure 2F
+
+Unique clonotype overlap as a function of cluster and time point.
 ```{r}
 tfh.28 <- subset(tfh, timepoint == "d28")
 
@@ -860,6 +863,8 @@ dev.off()
 
 
 ## Figure 2G
+
+Relative density of cells by time point with the previously established spike-specific TCRs highlighted.
 
 ```{r}
 sampled <- df %>%
@@ -1049,6 +1054,8 @@ saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 
 
 ## Figure 3B
+
+Co-embedding of clonotypes based on the PCA and TCR lament dimensions.
 ```{r}
 conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
@@ -1077,6 +1084,9 @@ ggsave("./output/Figure3/Figure3B.png", height = 4, width = 5.75, dpi = 600)
 ```
 
 ## Figure 3C
+
+Tfh markers across the clonotype manifold.
+
 ```{r}
 x.features <- c("BCL6", "CXCL13", "CXCR5", "ICOS", "MAF", "PDCD1", "EMP3", "KLF2")
 x <- FeaturePlot(conga, 
@@ -1097,6 +1107,9 @@ ggsave("./output/Figure3/Figure3C.png", height = 10.67, width = 6.67, dpi = 600)
 ```
 
 ## Figure 3D
+
+Overlay of spike-specific TCRs (TCRA and TCRB labels) on clonotype manifold.
+
 ```{r}
 epitope <- stringr::str_sort(na.omit(unique(df$TCRA.epitope)), numeric = TRUE)
         
@@ -1135,6 +1148,8 @@ ggsave("./output/Figure3/Figure3D_TRB.png", height = 4, width = 5, dpi = 600)
 
 ## Figure 3E
 
+TCR motifs in clusters with spike-specific clones.
+
 ```{r}
 
 clusters <- c(0,1,2)
@@ -1168,6 +1183,9 @@ for(i in seq_along(clusters)) {
 
 
 ## Figure 3F
+
+Highlighting of clonotypes for validation. 
+
 ```{r}
 df.sub <- subset(df, !is.na(confirmation.seq))
 
@@ -1184,6 +1202,8 @@ ggsave("./output/Figure3/Figure3F.png", height = 4, width = 5, dpi = 600)
 ```
 
 # Figure 4 Graphs
+
+Examining spike-specific cells in the Tfh compartment.
 
 ```{r cars}
 
@@ -1278,6 +1298,8 @@ write.csv(updated.shared.clones, "./output/Figure4/Figure4_spike.clones.csv")
 
 ## Figure 4A
 
+Differential gene expression in spike-specific Tfh cells comparing early (d28) to late (d201).
+
 ```{r}
 SeuratObj <- subset(SeuratObj, timepoint != "d110")
 subset.obj <- subset(SeuratObj, CTaa %in% updated.shared.clones)
@@ -1326,6 +1348,8 @@ ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 5, dpi = 600)
 
 ## Figure 4B
 
+Examining gene set enrichment in spike-specific Tfh cells as a function of time.
+
 ```{r}
 ES <- readRDS("./data/processedData/enrichmentResults.rds")
 meta <- subset.obj[[]]
@@ -1333,10 +1357,7 @@ meta <- subset.obj[[]]
 ES2 <- ES[rownames(ES) %in% rownames(meta),]
 colnames(ES2) <- stringr::str_remove_all(colnames(ES2), "_UCell")
 variances <- apply(ES2, 2, var)
-#ES2 <- ES2[,-which(variances == 0)]
-
 pathways <- colnames(ES2)
-
 ES2 <- merge(ES2, meta, by = 0)
 
 sig.results <- getSignificance(ES2, 
@@ -1361,11 +1382,11 @@ ANOVA.sig.pathways <- sig.results2 %>%
                         slice_max(order_by = f.value, n = 400) %>%
                         rownames()
 
+#Finding common pathways
 pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
 
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
 pathways.intersect <- pathways.intersect[-which(pathways.intersect %in% c( "BIOCARTA_FIBRINOLYSIS_PATHWAY", "BIOCARTA_AMI_PATHWAY", "BIOCARTA_EXTRINSIC_PATHWAY"))]
-
 
 write(pathways.intersect, "output/Figure4/Figure4B_intersected.pathways.txt")
 
@@ -1392,6 +1413,8 @@ dev.off()
 ```
 
 ## Figure 4C 
+
+Alluvial plots spike-specific clones in Tfh across time points. Y-axis is the relative proportion the clone represents as a function of the entire repertoire sequenced at the indicated time point.
 
 ```{r}
 "%!in%" <- Negate("%in%")
@@ -1468,6 +1491,8 @@ meta$TRB <- stringr::str_split(meta$CTaa, "_", simplify = TRUE)[,2]
 
 ## Figure 5A
 
+Rarefication and extrapolation analysis for donors with blood and lymph node samples.
+
 ```{r}
 
 dat.output <- NULL
@@ -1497,6 +1522,8 @@ ggsave("./output/Figure5/Figure5A.pdf", height = 7, width = 7)
 ```
 
 ## Figure 5B
+
+Venn diagram of clones in the blood and lymph nodes.
 
 ```{r}
 subjects <- c("368-01a", "368-13", "368-22")
@@ -1550,6 +1577,8 @@ for (i in seq_along(subjects)) {
 ```
 
 ## Figure 5C
+
+Scatter plot of clones in the blood and lymph nodes of donor 368-01a and 368-22 (donors with overlapping clonotypes).
 
 ```{r}
 
@@ -1697,7 +1726,6 @@ TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
 
 seuratObj$TCRB.COVID <- "No"
 seuratObj$TCRB.COVID[grepl("Spike", seuratObj$TRB_Epitope.target)] <- "Yes"
-#seuratObj$TCRB.COVID[!is.na(seuratObj$TCRB.epitope)] <- "Yes"
 seuratObj$TCRB.COVID[!is.na(seuratObj$confirmation.neighbors.TCRB)] <- "Yes"
 TCRB.ref <- data.frame("CTaa" = seuratObj$CTaa, "COVID" = seuratObj$TCRB.COVID)
 TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
@@ -1710,6 +1738,8 @@ subset.Obj <- subset(subset.Obj, CD8.pos == "No")
 ```
 
 # Figure 6A
+
+Differential expression of spike-specific CD4+ T cells between lymph node and blood.
 
 ```{r}
 Idents(subset.Obj) <- "tissue"
@@ -1750,6 +1780,8 @@ ggsave("./output/Figure6/Figure6A.pdf", height = 4.5, width = 5, dpi = 600)
 ```
 
 ## Figure 6B
+
+Examining differential enrichment in spike-specific CD4+ T cells between lymph node and blood.
 
 ```{r}
 meta <- subset.Obj[[]]
@@ -1817,7 +1849,6 @@ for (i in seq_along(samples)) {
 list <- merge(list[[1]], list[-1])
 
 meta <- list[[]]
-#meta <- meta[,-which(colnames(meta) %in% colnames(data.inventory))]
 barcodes <- rownames(meta)
 meta <- merge(meta, inventory, by.x = "orig.ident", by.y = "sample")
 meta <- meta[,colnames(inventory)[-2]]
@@ -1974,6 +2005,8 @@ saveRDS(list, file = "./data/processedData/PB_Fullintegrated_seuratObjects_Tcell
 
 ## Figure 7B
 
+UMAP embedding of spike-specific CD4+ T cells in COVID vaccination and infection.
+
 ```{r}
 list <- readRDS("./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
 spike <- read.csv("./output/Figure4/Figure4_spike.clones.csv")
@@ -2018,6 +2051,8 @@ ggsave("./output/Figure7/Figure7B.png", height = 3.5, width = 4, dpi = 600, bg =
 
 ## Figure 7C
 
+Breakdown of UMAP/cluster of spike-specific CD4+ T cells in COVID vaccination and infection.
+
 ```{r}
 subset.Obj$study <- "s350"
 subset.Obj$study[grepl("368", subset.Obj$donor)] <- "s368"
@@ -2045,6 +2080,8 @@ ggsave("./output/Figure7/Figure7C_2.pdf", height = 3.5, width = 4)
 
 ## Figure 7D
 
+Display of cluster markers.
+
 ```{r}
 markers <- FindAllMarkers(subset.Obj)
 write.csv(markers, "./output/Figure7/Figure7_AgspecificBlood_markers.csv")
@@ -2063,6 +2100,8 @@ ggsave("./output/Figure7/Figure7D.pdf", height = 16, width = 6)
 
 ## Figure 7E
 
+Clusters of spike-specific clones as a function of vgene usage and edit distance. 
+
 ```{r}
 subset.Obj <- clusterTCR(subset.Obj, 
                          group.by = "donor",
@@ -2079,7 +2118,7 @@ df <- data.frame(subset.Obj@reductions$umap@cell.embeddings, subset.Obj@meta.dat
 df <- df %>%
   group_by(TRA_cluster) %>%
   mutate(n = n())
-df$TRA_cluster[df$n >= 2] <- NA
+df$TRA_cluster[df$n >= 2] <- NA #removing any cluster that is 2 or less 
 
 mycolors <- colorRampPalette(brewer.pal(11, "RdYlBu"))(length(na.omit(unique(df$TRA_cluster))))
 
@@ -2105,6 +2144,8 @@ ggsave("./output/Figure7/Figure7E_2.pdf", height = 3.5, width = 10)
 
 
 ## Figure 7F
+
+Breakdown of spike-specific CD4+ T cells in COVID vaccination and infection by time.
 
 ```{r}
 mycolors <- colorRampPalette(brewer.pal(11, "Paired"))(length(unique(subset.Obj$seurat_clusters)))
