@@ -49,6 +49,7 @@ suppressPackageStartupMessages({
       library(stringdist)
       library(stringr)
       library(Trex)
+      library(scProportionTest)
 })
 ```
 
@@ -2030,7 +2031,7 @@ subset.Obj <- subset.Obj %>%
     RunUMAP(reduction = "harmony",
             dims = 1:25,
             n.epochs = 500) %>%
-    FindClusters(resolution = 0.5, 
+    FindClusters(resolution = 0.6, 
                  algorithm = 3) %>% 
     identity()
 
@@ -2076,6 +2077,15 @@ ggplot(df, aes(x = study, fill = seurat_clusters)) +
   guides(fill = "none") + 
   theme(axis.title = element_blank())
 ggsave("./output/Figure7/Figure7C_2.pdf", height = 3.5, width = 4)
+
+subset <- subset(subset.Obj, relative.time == "Late")
+prop_test <- sc_utils(subset)
+
+perm.results  <- permutation_test(
+                  	prop_test, cluster_identity = "seurat_clusters",
+                  	sample_1 = "s368", sample_2 = "s350",
+                  	sample_identity = "study")
+write.csv(perm.results@results$permutation, "./output/Figure7/cluster.permutation.results.csv")
 ```
 
 ## Figure 7D
