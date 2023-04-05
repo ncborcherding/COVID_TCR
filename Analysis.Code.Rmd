@@ -2010,7 +2010,7 @@ UMAP embedding of spike-specific CD4+ T cells in COVID vaccination and infection
 
 ```{r}
 list <- readRDS("./data/processedData/PB_Fullintegrated_seuratObjects_Tcells.rds")
-spike <- read.csv("./output/Figure4/Figure4_spike.clones.csv")
+spike <- read.csv("./output/Figure7/Reference_spike.clones.csv")
 cells <- unique(c(rownames(list[[]])[which(list$CTaa %in% spike$x)], 
                 rownames(list[[]])[!is.na(list$TCRB.epitope)], 
                 rownames(list[[]])[!is.na(list$TCRA.epitope)]))
@@ -2031,7 +2031,7 @@ subset.Obj <- subset.Obj %>%
     RunUMAP(reduction = "harmony",
             dims = 1:25,
             n.epochs = 500) %>%
-    FindClusters(resolution = 0.6, 
+    FindClusters(resolution = 0.5, 
                  algorithm = 3) %>% 
     identity()
 
