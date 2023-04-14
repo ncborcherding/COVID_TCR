@@ -1260,16 +1260,6 @@ conga@meta.data$TCR.both <- stringr::str_remove_all(conga@meta.data$TCR.both, "N
 conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.1TCR.1"] <- "TCR.1"
 conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.2TCR.2"] <- "TCR.2"
 
-df <- data.frame(conga@reductions$phateTrex@cell.embeddings,
-                  conga[[]])
-
-
-df.sub <- subset(df, !is.na(confirmation.seq))
-df.sub2 <- subset(df, !is.na(TCR.both))
-write.csv(df.sub2, "Trex_edit.distance2_matchedVgenes.csv")
-
-
-
 saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 
 dir.create("./output/Figure4")
