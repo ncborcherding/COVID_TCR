@@ -1260,31 +1260,88 @@ conga@meta.data$TCR.both <- stringr::str_remove_all(conga@meta.data$TCR.both, "N
 conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.1TCR.1"] <- "TCR.1"
 conga@meta.data$TCR.both[conga@meta.data$TCR.both == "TCR.2TCR.2"] <- "TCR.2"
 
-saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
+sequence <- read.csv("./sequenceInfo/Sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(conga$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
 
-dir.create("./output/Figure4")
+conga$TCRB.S167.180<- NA
+conga$TCRB.S167.180[TB] <- "Specific"
 
-conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
+conga$TCRA.S167.180 <- NA
+conga$TCRA.S167.180[TA] <- "Specific"
+
+sequence <- read.csv("./sequenceInfo/dykema.sequences.csv")
+CTaa <- as.data.frame(stringr::str_split(conga$CTaa, "_", simplify = TRUE))
+TA <-which(CTaa$V1 %in% sequence$cdr3a)
+TB <-which(CTaa$V2 %in% sequence$cdr3b)
+
+conga$TCRB.S815.830 <- NA
+conga$TCRB.S815.830[TB] <- "Specific"
+
+conga$TCRA.S815.830 <- NA
+conga$TCRA.S815.830[TA] <- "Specific"
+
+# VDJdb sequence
+
+sequences <- read.delim("./sequenceInfo/VDJdb.tsv")
+sequences <- sequences[sequences$MHC.class == "MHCII" & sequences$Epitope.gene == "Spike",]
+
+epitope <- c("NCTFEYVSQPFLMDL" = "S164.179",
+"RISNCVADYSVLYNS" = "S356.371",
+"NFSQILPDPSKPSKR" = "S800.815",
+"HWFVTQRNFYEPQII" = "S1101.1115",
+"VGGNYNYLYRLFRKS" = "S445.459",
+"NNSYECDIPIGAGIC" = "S657.671")
+
+conga$TCRB.VDJ.db <- NA
+conga$TCRA.VDJ.db <- NA
+for (i in seq_along(epitope)) {
+  sequences$Epitope[which(sequences$Epitope == names(epitope)[i])] <- epitope[i]
+  TA <- sequences[sequences$Gene == "TRA" & sequences$Epitope == epitope[i], ]
+  TB <- sequences[sequences$Gene == "TRB" & sequences$Epitope == epitope[i], ]
+  TA.loc <-which(CTaa$V1 %in% TA$CDR3)
+  TB.loc <-which(CTaa$V2 %in% TB$CDR3)
+  conga$TCRB.VDJ.db[TB.loc] <- epitope[i]
+  conga$TCRA.VDJ.db[TA.loc] <- epitope[i]
+}
+
+conga$TCRB.epitope  <- NA
+conga$TCRB.epitope <- ifelse(!is.na(conga$TCRB.S167.180), "S167.180", NA)
+conga$TCRB.epitope <- ifelse(!is.na(conga$TCRB.S815.830), "S815.830", conga$TCRB.epitope)
+conga$TCRB.epitope <- ifelse(!is.na(conga$TCRB.VDJ.db) & is.na(conga$TCRB.epitope), conga$TCRB.VDJ.db, conga$TCRB.epitope)
+
+conga$TCRA.epitope  <- NA
+conga$TCRA.epitope <- ifelse(!is.na(conga$TCRA.S167.180), "S167.180", NA)
+conga$TCRA.epitope <- ifelse(!is.na(conga$TCRA.S815.830), "S815.830", conga$TCRA.epitope)
+conga$TCRA.epitope <- ifelse(!is.na(conga$TCRA.VDJ.db) & is.na(conga$TCRA.epitope), conga$TCRA.VDJ.db, conga$TCRA.epitope)
+
 conga$TCRA.COVID <- "No"
 conga$TCRA.COVID[grepl("Spike", conga$TRA_Epitope.target)] <- "Yes"
 conga$TCRA.COVID[!is.na(conga$TCRA.epitope)] <- "Yes"
-conga$TCRA.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRA)] <- "Yes"
+conga$TCRA.COVID[!is.na(conga$confirmation.neighbors.TCRA)] <- "Yes"
 TCRA.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRA.COVID)
 TCRA.ref <- subset(TCRA.ref, COVID == "Yes")
 
 conga$TCRB.COVID <- "No"
 conga$TCRB.COVID[grepl("Spike", conga$TRB_Epitope.target)] <- "Yes"
-conga$TCRB.COVID[!is.na(conga$TCRB.epitope)] <- "Yes"
-conga$TCRB.COVID[!is.na(conga@meta.data$confirmation.neighbors.TCRB)] <- "Yes"
+conga$TCRB.COVID[!is.na(conga$confirmation.neighbors.TCRB)] <- "Yes"
 TCRB.ref <- data.frame("CTaa" = conga$CTaa, "COVID" = conga$TCRB.COVID)
 TCRB.ref <- subset(TCRB.ref, COVID == "Yes")
 
+saveRDS(conga, "./data/processedData/conga_tfh_seuratObject.rds")
 
+dir.create("./output/Figure4")
+
+conga <- readRDS("./data/processedData/conga_tfh_seuratObject.rds")
 
 SeuratObj <- readRDS("./data/processedData/Fullintegrated_seuratObjects_TFH_TFHonly.rds")
 
+meta <- SeuratObj[[]]
+meta <- meta[meta$CTaa %in% unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)),]
+write.csv(meta, "./output/Figure4/Figure4_spike.clones_table.csv", row.names = FALSE)
+
 updated.shared.clones <- sort(unique(c(TCRB.ref$CTaa, TCRA.ref$CTaa)))
-write.csv(updated.shared.clones, "./output/Figure4/Figure4_spike.clones.csv")
 ```
 
 ## Figure 4A
