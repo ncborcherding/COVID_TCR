@@ -1434,7 +1434,7 @@ ANOVA.sig.pathways <- sig.results2 %>%
 pathways.intersect <- intersect(KW.sig.pathways, ANOVA.sig.pathways)
 
 pathways.intersect <- pathways.intersect[!grepl("REACTOME", pathways.intersect) ]
-pathways.intersect <- pathways.intersect[-which(pathways.intersect %in% c( "BIOCARTA_FIBRINOLYSIS_PATHWAY", "BIOCARTA_AMI_PATHWAY", "BIOCARTA_EXTRINSIC_PATHWAY"))]
+pathways.intersect <- pathways.intersect[-which(pathways.intersect %in% c( "BIOCARTA_FIBRINOLYSIS_PATHWAY", "BIOCARTA_AMI_PATHWAY", "BIOCARTA_EXTRINSIC_PATHWAY", "BIOCARTA_CREM_PATHWAY"))]
 
 write(pathways.intersect, "output/Figure4/Figure4B_intersected.pathways.txt")
 
@@ -1446,7 +1446,7 @@ normalize <- function(x) {
       (x- min(x)) /(max(x)-min(x))
 }
 
-for(i in 2:74) {
+for(i in 2:70) {
   summary[,i] <- normalize(summary[,i])
 }
 summary <- as.data.frame(summary)
@@ -1454,9 +1454,8 @@ summary <- as.data.frame(summary)
 rownames(summary) <- summary$timepoint
 
 
-
 pdf("./output/Figure4/Figure4b.pdf", height = 10, width = 10)
-pheatmap::pheatmap(t(summary[,2:74]), scale = "row")
+pheatmap::pheatmap(t(summary[,2:70]), scale = "row")
 dev.off()
 ```
 
