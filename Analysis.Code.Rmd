@@ -1363,10 +1363,15 @@ FvL.markers <- FindMarkers(subset.obj,
                            pseudocount.use = 0.1)
 
 write.csv(FvL.markers, "./output/Figure4/Figure4A_Tfh.DEG.d28vsd201.csv")
+```
+
+
+```{r}
+FvL.markers <- read.csv("./output/Figure4/Figure4A_Tfh.DEG.d28vsd201.csv")
+colnames(FvL.markers)[1] <- "genes"
 
 FvL.markers <- FvL.markers %>%
-                mutate(Percent.Delta = pct.1 - pct.2)
-FvL.markers$genes <- rownames(FvL.markers)
+                mutate(Percent.Delta = abs(pct.1 - pct.2)*100)
 
 top10 <- FvL.markers %>% 
   subset(p_val < 0.05) %>%
@@ -1385,13 +1390,15 @@ FvL.plot <- ggplot(FvL.markers, aes(x = avg_log2FC, y = -log10(p_val))) +
              aes(size = Percent.Delta), color = rb.palette[11]) + 
   geom_text_repel(data=subset(FvL.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 20) + 
   theme_classic() + 
-  scale_size(range = c(0.1,3)) + 
+  scale_size(range = c(0.1,3), breaks = c(5,10,15,20,25,30)) + 
   geom_hline(yintercept = 1.3) + 
-  geom_vline(xintercept = 0)
+  geom_vline(xintercept = 0) + 
+  theme(axis.title = element_blank(), 
+         axis.text = element_blank())
 
 FvL.plot
 ggsave("./output/Figure4/Figure4A.png", height = 4.5, width = 5, dpi = 600)
-
+ggsave("./output/Figure4/Figure4A.pdf", height = 4.5, width = 5)
 ```
 
 ## Figure 4B
@@ -1799,9 +1806,11 @@ LNvB.markers <- FindMarkers(subset.Obj,
                            pseudocount.use = 0.1)
 
 write.csv(LNvB.markers, "./output/Figure6/Figure6A_Ag.specific.LNvsBL.csv")
+
+LNvB.markers <- read.csv("./output/Figure6/Figure6A_Ag.specific.LNvsBL.csv")
+colnames(LNvB.markers)[1] <- "genes"
 LNvB.markers <- LNvB.markers %>%
-                mutate(Percent.Delta = pct.1 - pct.2)
-LNvB.markers$genes <- rownames(LNvB.markers)
+                mutate(Percent.Delta = abs(pct.1 - pct.2)*100)
 
 
 top10 <- LNvB.markers %>% 
@@ -1819,11 +1828,14 @@ LNvBL.plot <- ggplot(LNvB.markers, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
   geom_point(data=subset(LNvB.markers, genes %in% bottom10$genes),
              aes(size = Percent.Delta), color = rb.palette[11]) + 
   geom_text_repel(data=subset(LNvB.markers, genes %in% c(top10$genes,bottom10$genes)), aes(label = genes), max.overlaps = 30) + 
-  theme_classic() + 
-  scale_size(range = c(0.1,3)) + 
+  
+  scale_size(range = c(0.1,3), breaks = c(5,10,15,20,25,30)) + 
   geom_hline(yintercept = 1.3) + 
-  geom_vline(xintercept = 0)
-ggsave("./output/Figure6/Figure6A.pdf", height = 4.5, width = 5, dpi = 600)
+  geom_vline(xintercept = 0) + 
+  theme_classic() + 
+  theme(axis.title = element_blank(), 
+        axis.text = element_blank())
+ggsave("./output/Figure6/Figure6A.pdf", height = 4.5, width = 5)
 ```
 
 ## Figure 6B
